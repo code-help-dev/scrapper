@@ -1,0 +1,77 @@
+# ── Node ──────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm
+.yarn-integrity
+
+# ── Build output ───────────────────────────────────────────────
+dist/
+build/
+*.js.map
+
+# ── TypeScript ─────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Environment / Secrets ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# ── Logs ───────────────────────────────────────────────────────
+logs/
+*.log
+combined.log
+error.log
+
+# ── Test & Coverage ────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Playwright ─────────────────────────────────────────────────
+playwright-report/
+playwright/.cache/
+test-results/
+blob-report/
+.auth/
+
+# ── AWS ────────────────────────────────────────────────────────
+.aws/
+aws-credentials.json
+
+# ── Uploads / Exports ──────────────────────────────────────────
+uploads/
+exports/
+tmp/
+temp/
+
+# ── YAML Secrets ───────────────────────────────────────────────
+config/secrets.yaml
+config/secrets.yml
+
+# ── Docker ─────────────────────────────────────────────────────
+.docker-data/
+
+# ── IDE ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+.vs/
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini

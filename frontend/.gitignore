@@ -1,0 +1,48 @@
+# ── Node ──────────────────────────────────────────────────────
+node_modules/
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm
+
+# ── Next.js build output ───────────────────────────────────────
+/.next/
+/out/
+/build
+
+# ── TypeScript ─────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Environment / Secrets ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+.env*.local
+
+# ── Test & Coverage ────────────────────────────────────────────
+/coverage
+
+# ── Misc ───────────────────────────────────────────────────────
+.DS_Store
+*.pem
+
+# ── Vercel / deployment ────────────────────────────────────────
+.vercel
+
+# ── IDE ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+ehthumbs.db
