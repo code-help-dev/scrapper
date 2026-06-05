@@ -89,37 +89,8 @@ export class ProductsController {
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    // Primary: Category collection
-    const slug = category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const cat = await this.categoryModel
-      .findOne({ $or: [{ slug }, { name: { $regex: `^${category}$`, $options: 'i' } }] })
-      .select('subCategories')
-      .lean()
-      .exec();
-
-    if (cat && cat.subCategories.length > 0) {
-      // Enrich with live product counts from Product collection
-      const subNames = cat.subCategories.map((s) => s.name);
-      const counts = await this.productModel
-        .aggregate([
-          {
-            $match: {
-              category: { $regex: `^${category}$`, $options: 'i' },
-              subCategory: { $in: subNames },
-            },
-          },
-          { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
-        ])
-        .exec();
-      const countMap = new Map(counts.map((c) => [c._id as string, c.productCount as number]));
-      const result = cat.subCategories
-        .map((s) => ({ name: s.name, productCount: countMap.get(s.name) ?? 0 }))
-        .sort((a, b) => b.productCount - a.productCount);
-      await this.cacheService.set(cacheKey, result, SUBCATEGORIES_TTL);
-      return result;
-    }
-
-    // Fallback: aggregate from Product collection
+    // Always derive from Product collection — the Category.subCategories array can contain
+    // stale or cross-contaminated entries due to the Mongoose subdoc _id bug (fixed in schema).
     const result = await this.productModel
       .aggregate([
         {

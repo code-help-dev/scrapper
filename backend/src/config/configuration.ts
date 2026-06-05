@@ -17,7 +17,7 @@ export default () => ({
 
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRY || '15m',
+    expiresIn: process.env.JWT_EXPIRY || '7d',
     refreshSecret:
       process.env.REFRESH_TOKEN_SECRET || 'dev-refresh-secret-change-in-prod',
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d',

@@ -231,21 +231,32 @@ export class ExtractionProcessor extends WorkerHost {
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
-        const update: Record<string, any> = {
-          $setOnInsert: { name: normalized.category, slug },
-          $inc: { productCount: 1 },
-        };
+
+        // Step 1: upsert the category and increment productCount
+        const cat = await this.categoryModel.findOneAndUpdate(
+          { slug },
+          {
+            $setOnInsert: { name: normalized.category, slug },
+            $inc: { productCount: 1 },
+          },
+          { upsert: true, new: true },
+        );
+
+        // Step 2: push subcategory only if that slug isn't already in the array.
+        // $addToSet is insufficient here because it compares full object equality
+        // (including any legacy _id fields on subdocs), so duplicates can slip through.
         if (normalized.subCategory) {
-          const subSlug = normalized.subCategory
+          const normalizedSubName = normalized.subCategory.trim();
+          const subSlug = normalizedSubName
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-|-$/g, '');
-          update.$addToSet = { subCategories: { name: normalized.subCategory, slug: subSlug } };
+          await this.categoryModel.updateOne(
+            { _id: cat._id, 'subCategories.slug': { $ne: subSlug } },
+            { $push: { subCategories: { name: normalizedSubName, slug: subSlug } } },
+          );
         }
-        const cat = await this.categoryModel.findOneAndUpdate({ slug }, update, {
-          upsert: true,
-          new: true,
-        });
+
         await this.productModel.findByIdAndUpdate(savedProduct.id, { categoryId: cat._id });
       } catch (e: any) {
         this.logger.warn(`[${jobId}] Category upsert failed: ${e.message}`);

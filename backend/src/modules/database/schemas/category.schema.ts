@@ -16,7 +16,8 @@ export class Category {
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   slug: string;
 
-  @Prop({ type: [{ name: String, slug: String }], default: [] })
+  // _id: false prevents Mongoose from adding unique _id per subdoc, which breaks $addToSet dedup
+  @Prop({ type: [{ name: String, slug: String, _id: false }], default: [] })
   subCategories: SubCategoryItem[];
 
   @Prop({ default: 0, min: 0 })
