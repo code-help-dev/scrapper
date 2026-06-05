@@ -1,0 +1,97 @@
+# Aajjo raw field name → normalized schema key mapping
+# Format:  "raw label from Aajjo page": "normalized_key"
+# All keys are lowercase; values map to product.specifications[].name
+
+# ── Basic Info ─────────────────────────────────────────────────
+"Product Name": productName
+"Price": price
+"Minimum Order Quantity": moq
+"MOQ": moq
+"Category": category
+"Sub Category": subCategory
+
+# ── Material & Composition ─────────────────────────────────────
+"Material": material
+"Base Material": material
+"Material Grade": materialGrade
+"Fabric Material": material
+"Raw Material": material
+
+# ── Dimensions & Weight ────────────────────────────────────────
+"Dimensions": dimensions
+"Size": size
+"Length": length
+"Width": width
+"Height": height
+"Weight": weight
+"Thickness": thickness
+"Diameter": diameter
+"Capacity": capacity
+
+# ── Product Attributes ─────────────────────────────────────────
+"Color": color
+"Colour": color
+"Finish": finish
+"Surface Finish": finish
+"Shape": shape
+"Pattern": pattern
+"Design": design
+"Style": style
+"Type": type
+"Product Type": type
+
+# ── Brand & Origin ─────────────────────────────────────────────
+"Brand": brand
+"Brand Name": brand
+"Country of Origin": countryOfOrigin
+"Country Of Origin": countryOfOrigin
+"Place of Origin": countryOfOrigin
+
+# ── Packaging ──────────────────────────────────────────────────
+"Packaging Type": packagingType
+"Packaging": packagingType
+"Pack Size": packSize
+"Units Per Pack": unitsPerPack
+
+# ── Technical / Industrial ─────────────────────────────────────
+"Voltage": voltage
+"Power": power
+"Wattage": wattage
+"Frequency": frequency
+"Speed": speed
+"Pressure": pressure
+"Temperature": temperature
+"Grade": grade
+"Model": model
+"Model Number": modelNumber
+
+# ── Compliance / Certifications ────────────────────────────────
+"Certification": certification
+"Standard": standard
+"IS Standard": standard
+"BIS Certification": certification
+
+# ── Usage & Application ────────────────────────────────────────
+"Usage": usage
+"Application": application
+"Usage/Application": usage
+"Features": features
+
+# ── Unit Normalization Rules ────────────────────────────────────
+# Applied after field mapping; values parsed and standardized
+unit_normalization:
+  weight:
+    - { from: "g", to: "kg", factor: 0.001 }
+    - { from: "gm", to: "kg", factor: 0.001 }
+    - { from: "gram", to: "kg", factor: 0.001 }
+    - { from: "lbs", to: "kg", factor: 0.4536 }
+  dimensions:
+    - { from: "mm", to: "cm", factor: 0.1 }
+    - { from: "m", to: "cm", factor: 100 }
+    - { from: "inch", to: "cm", factor: 2.54 }
+    - { from: "in", to: "cm", factor: 2.54 }
+    - { from: "ft", to: "cm", factor: 30.48 }
+  currency:
+    - { from: "Rs.", to: "INR" }
+    - { from: "Rs", to: "INR" }
+    - { from: "₹", to: "INR" }

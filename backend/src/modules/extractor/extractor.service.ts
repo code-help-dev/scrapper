@@ -1,0 +1,794 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Page } from 'playwright';
+import { SELECTORS } from './aajjo-selectors';
+
+export interface SpecItem {
+  name: string;
+  value: string;
+  rawName: string;
+  section: 'basic' | 'extended';
+  confidence: number;
+}
+
+export interface ImageRef {
+  originalUrl: string;
+  isFeatured: boolean;
+}
+
+export interface SellerData {
+  sellerName: string;
+  sellerLogoUrl: string;
+  gstNumber: string;
+  address: string;
+  state: string;
+  country: string;
+  businessType: string;
+  yearsEstablished: number | null;
+  numberOfEmployees: string;
+  turnover: string;
+  legalStatus: string;
+  contactDetails: string;
+  aajjoProfileUrl: string;
+}
+
+export interface ExtractedProduct {
+  productName: string;
+  category: string;
+  subCategory: string;
+  price: number | null;
+  currency: string;
+  moq: number | null;
+  description: string;
+  deliveryInformation: string;
+  warrantyInformation: string;
+  specifications: SpecItem[];
+  images: ImageRef[];
+  seller: SellerData;
+  sourceUrl: string;
+  confidenceScore: number;
+}
+
+@Injectable()
+export class ExtractorService {
+  private readonly logger = new Logger(ExtractorService.name);
+
+  // ── Multi-selector text helper ────────────────────────────────────────────
+
+  private async trySelectors(
+    page: Page,
+    selectors: string[],
+    attribute?: string,
+  ): Promise<{ value: string; confidence: number }> {
+    for (let i = 0; i < selectors.length; i++) {
+      try {
+        const el = await page.$(selectors[i]);
+        if (!el) continue;
+        const raw = attribute
+          ? ((await el.getAttribute(attribute)) ?? '')
+          : ((await el.textContent()) ?? '');
+        const value = raw.trim();
+        if (value) return { value, confidence: Math.max(100 - i * 10, 40) };
+      } catch {
+        continue;
+      }
+    }
+    return { value: '', confidence: 0 };
+  }
+
+  // ── Price parsing ─────────────────────────────────────────────────────────
+  // Aajjo price text: "₹ 29,500 \n Get Latest Price"
+
+  private parsePrice(raw: string): { price: number | null; currency: string } {
+    const currencyMap: Record<string, string> = { '₹': 'INR', '$': 'USD', '€': 'EUR' };
+    let currency = 'INR';
+    for (const [sym, iso] of Object.entries(currencyMap)) {
+      if (raw.includes(sym)) { currency = iso; break; }
+    }
+    const numStr = raw.replace(/[₹$€,]/g, '').match(/[\d.]+/)?.[0];
+    const price = numStr ? parseFloat(numStr) : null;
+    return { price, currency };
+  }
+
+  // ── MOQ: text search in full page text ───────────────────────────────────
+
+  private async extractMoq(page: Page): Promise<number | null> {
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      const match = text.match(/Min(?:imum)?\s+Order\s+Quantity\s*[:\-]\s*([\d,]+)/i);
+      if (match) {
+        const n = parseFloat(match[1].replace(/,/g, ''));
+        return isNaN(n) ? null : n;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  // ── Navigate Aajjo product page tabs before extraction ───────────────────
+  // Aajjo renders Specification, Description, and CompanyDetails behind
+  // click-activated anchor-hash tabs. Clicking each ensures the content is
+  // fully in the DOM before we read it.
+
+  private async navigateProductTabs(page: Page): Promise<void> {
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const clickTabAndWait = async (selector: string): Promise<boolean> => {
+      try {
+        const el = await page.$(selector);
+        if (!el) return false;
+        await el.click();
+        await page
+          .waitForFunction(() => document.readyState === 'complete', { timeout: 4000 })
+          .catch(() => {});
+        await sleep(800);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // Specification tab
+    await clickTabAndWait('a[href="#Specification"]') ||
+      await clickTabAndWait('a[href="#TechnicalSpecification"]') ||
+      await clickTabAndWait('a[href="#technical-specification"]') ||
+      await clickTabAndWait('[data-toggle="tab"][href*="Spec"]') ||
+      await clickTabAndWait('[data-bs-toggle="tab"][href*="Spec"]');
+
+    // Description tab
+    await clickTabAndWait('a[href="#Description"]') ||
+      await clickTabAndWait('a[href="#ProductDescription"]') ||
+      await clickTabAndWait('a[href="#product-description"]') ||
+      await clickTabAndWait('[data-toggle="tab"][href*="Description"]') ||
+      await clickTabAndWait('[data-bs-toggle="tab"][href*="Description"]');
+
+    // Company / Seller tab
+    await clickTabAndWait('a[href="#CompanyDetails"]') ||
+      await clickTabAndWait('a[href="#SellerDetails"]') ||
+      await clickTabAndWait('[data-toggle="tab"][href*="Company"]') ||
+      await clickTabAndWait('[data-bs-toggle="tab"][href*="Company"]');
+  }
+
+  // ── Expand hidden specs — click "More Specifications" before reading ────────
+  // Aajjo product pages sometimes hide additional spec rows behind a toggle
+  // link. We click it (if present) so all rows are in the DOM before we query.
+
+  private async expandSpecifications(page: Page): Promise<void> {
+    try {
+      const clicked = await page.evaluate(() => {
+        const keywords = [
+          'more specification',
+          'show more specification',
+          'view all specification',
+          'all specification',
+          'more spec',
+          'show all',
+          'view more',
+          'more details',
+        ];
+        const els = Array.from(
+          document.querySelectorAll('a, button, [role="button"], .show-more, .more-spec, [class*="more-spec"], [id*="more-spec"], [class*="showMore"], [id*="showMore"]'),
+        ) as HTMLElement[];
+        for (const el of els) {
+          const txt = (el.textContent ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+          if (keywords.some((k) => txt.includes(k))) {
+            el.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (clicked) {
+        // Wait briefly for DOM updates / any CSS transition
+        await page.waitForFunction(() => document.readyState === 'complete', { timeout: 5000 }).catch(() => {});
+        await new Promise<void>((r) => setTimeout(r, 1200));
+        this.logger.debug('expandSpecifications: clicked More Specifications');
+      }
+    } catch (e: any) {
+      this.logger.debug(`expandSpecifications: ${e.message}`);
+    }
+  }
+
+  // ── Breadcrumb — multi-strategy to handle Aajjo's actual DOM structure ─────
+  // Strategy 0: JSON-LD BreadcrumbList (most reliable — structured data)
+  // Strategy 1: standard ol.breadcrumb or ul.breadcrumb with <li> items
+  // Strategy 2: any element with class/id containing "breadcrumb" + <a> children
+  // Strategy 3: links that appear before <h1> whose href is a short category path
+  //             (/cutting-machines) or sub-category path (/cutting-machines/coconut-scraper)
+
+  private async extractBreadcrumb(page: Page): Promise<{ category: string; subCategory: string }> {
+    try {
+      return await page.evaluate(() => {
+        const clean = (el: Element | null | undefined): string =>
+          el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+        const isCategoryHref = (href: string): boolean => {
+          try {
+            const url = new URL(href);
+            // Accept any *.aajjo.com host — product pages are on seller subdomains
+            // (e.g. shop1.aajjo.com) while breadcrumb links go to www.aajjo.com
+            if (!url.hostname.endsWith('aajjo.com')) return false;
+            const parts = url.pathname.split('/').filter(Boolean);
+            const skip = ['product', 'ahata', 'login', 'register', 'contact', 'about', 'search', 'sitemap'];
+            return parts.length >= 1 && parts.length <= 2 && !skip.some((s) => parts[0].startsWith(s));
+          } catch { return false; }
+        };
+
+        // Strategy 0: JSON-LD BreadcrumbList — most structured, highest priority
+        const jsonLdScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+        for (const script of jsonLdScripts) {
+          try {
+            const data = JSON.parse(script.textContent ?? '{}');
+            const graphs: any[] = Array.isArray(data['@graph']) ? data['@graph'] : [data];
+            for (const g of graphs) {
+              if (g['@type'] === 'BreadcrumbList' && Array.isArray(g.itemListElement)) {
+                const items: string[] = g.itemListElement
+                  .map((i: any) => (i.name ?? i.item?.name ?? '').trim())
+                  .filter((n: string) => n && n.toLowerCase() !== 'home');
+                if (items.length >= 1) {
+                  return { category: items[0] ?? '', subCategory: items[1] ?? '' };
+                }
+              }
+            }
+          } catch { /* malformed JSON-LD, skip */ }
+        }
+
+        // Strategy 1: explicit <ol class="breadcrumb"> or <ul class="breadcrumb">
+        const listBreadcrumb = document.querySelector(
+          'ol.breadcrumb, ul.breadcrumb, nav[aria-label*="breadcrumb" i], [role="navigation"][class*="breadcrumb"]',
+        );
+        if (listBreadcrumb) {
+          // Prefer links (skip "Home" and current page / active item)
+          const links = Array.from(listBreadcrumb.querySelectorAll('a')).filter(
+            (a) => a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim(),
+          );
+          if (links.length >= 1) {
+            return { category: clean(links[0]), subCategory: links[1] ? clean(links[1]) : '' };
+          }
+          // No links — fall back to li text, skip "Home" and active/current item
+          const items = Array.from(listBreadcrumb.querySelectorAll('li'))
+            .map((li) => li.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+            .filter((t) => t && t.toLowerCase() !== 'home');
+          if (items.length >= 1) {
+            return { category: items[0] ?? '', subCategory: items[1] ?? '' };
+          }
+        }
+
+        // Strategy 2: any element whose class/id contains "breadcrumb"
+        const candidates = Array.from(
+          document.querySelectorAll('[class*="breadcrumb"], [id*="breadcrumb"]'),
+        );
+        for (const el of candidates) {
+          const links = Array.from(el.querySelectorAll('a')).filter(
+            (a) => a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim(),
+          );
+          if (links.length >= 1) {
+            return { category: clean(links[0]), subCategory: links[1] ? clean(links[1]) : '' };
+          }
+          const text = el.textContent ?? '';
+          const parts = text.split(/[»›>]/).map((s) => s.trim()).filter(Boolean);
+          if (parts.length >= 3) {
+            const nonHome = parts.filter((p) => p.toLowerCase() !== 'home');
+            if (nonHome.length >= 1) {
+              return { category: nonHome[0], subCategory: nonHome[1] ?? '' };
+            }
+          }
+        }
+
+        // Strategy 3: any small container (nav/div/p) containing » separator AND same-domain
+        // category links — handles Aajjo breadcrumbs that don't use a "breadcrumb" class/id.
+        const containers = Array.from(document.querySelectorAll('nav, div, p, span')) as HTMLElement[];
+        for (const el of containers) {
+          const text = el.textContent ?? '';
+          if (!text.includes('»') && !text.includes('›')) continue;
+          // Skip large structural sections (body, sidebars, product listings)
+          if (el.children.length > 15 || el.querySelectorAll('table, form, ul, ol').length > 0) continue;
+          const catLinks = (Array.from(el.querySelectorAll('a[href]')) as HTMLAnchorElement[])
+            .filter((a) => isCategoryHref(a.href) && a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim());
+          if (catLinks.length >= 1) {
+            const depth1 = catLinks.filter((a) => new URL(a.href).pathname.split('/').filter(Boolean).length === 1);
+            const depth2 = catLinks.filter((a) => new URL(a.href).pathname.split('/').filter(Boolean).length === 2);
+            const category = (depth1[0] ?? catLinks[0])?.textContent?.trim() ?? '';
+            const subCategory = (depth2[0] ?? catLinks[1])?.textContent?.trim() ?? '';
+            if (category) return { category, subCategory };
+          }
+        }
+
+        // Strategy 4: broadest fallback — any same-domain category link in the top
+        // portion of the page (avoids footer nav pollution).
+        const pageHeight = document.body.scrollHeight || 2000;
+        const allLinks = (Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[])
+          .filter((a) => {
+            if (a.textContent?.trim().toLowerCase() === 'home' || !a.textContent?.trim()) return false;
+            if (!isCategoryHref(a.href)) return false;
+            // Only consider links in the top 60% of the document
+            const rect = a.getBoundingClientRect();
+            const absTop = rect.top + window.scrollY;
+            return absTop < pageHeight * 0.6;
+          });
+
+        const cat1 = allLinks.find((a) => new URL(a.href).pathname.split('/').filter(Boolean).length === 1);
+        const cat2 = allLinks.find((a) => new URL(a.href).pathname.split('/').filter(Boolean).length === 2);
+
+        return { category: clean(cat1) || '', subCategory: clean(cat2) || '' };
+      });
+    } catch (e: any) {
+      this.logger.warn(`extractBreadcrumb failed: ${e.message}`);
+      return { category: '', subCategory: '' };
+    }
+  }
+
+  // ── Spec tables — SCOPED to this product only ─────────────────────────────
+  // A product page has ~23 tables; most belong to the "Similar Products"
+  // carousel. The product's OWN specs live in exactly two places:
+  //   • basic     → .product-details table  (left card)
+  //   • extended  → section containing id="Specification" or id="TechnicalSpecification"
+  // Each table mixes two row formats: 2 cells (key | value) and 1 cell "key : value".
+
+  private async extractSpecs(page: Page): Promise<SpecItem[]> {
+    const specs: SpecItem[] = [];
+    const seen = new Set<string>();
+
+    try {
+      const rows = await page.evaluate(() => {
+        const out: { key: string; val: string; section: 'basic' | 'extended' }[] = [];
+
+        const readTable = (table: Element | null | undefined, section: 'basic' | 'extended') => {
+          if (!table) return;
+          table.querySelectorAll('tr').forEach((tr) => {
+            const cells = Array.from(tr.querySelectorAll('td'));
+            if (cells.length >= 2) {
+              const key = cells[0].textContent?.trim() ?? '';
+              const val = cells[1].textContent?.trim() ?? '';
+              if (key && val) out.push({ key, val, section });
+            } else if (cells.length === 1) {
+              const text = cells[0].textContent?.trim() ?? '';
+              const idx = text.indexOf(':');
+              if (idx > 0) {
+                out.push({
+                  key: text.slice(0, idx).trim(),
+                  val: text.slice(idx + 1).trim(),
+                  section,
+                });
+              }
+            }
+          });
+        };
+
+        // Basic specs: left card — try known Aajjo class names (both spellings)
+        const basicTable =
+          document.querySelector('.product-details table.service-chart-datails') ??
+          document.querySelector('.product-details table.service-chart-details') ??
+          document.querySelector('table.service-chart-datails') ??
+          document.querySelector('table.service-chart-details');
+        readTable(basicTable, 'basic');
+
+        const isStopNode = (el: Element): boolean => {
+          if (/^H[1-4]$/.test(el.tagName)) return true;
+          const id = (el.id ?? '').toLowerCase();
+          const cls = (el.className ?? '').toLowerCase();
+          return id.includes('company') || cls.includes('company') || id === 'description' || id === 'productdescription';
+        };
+
+        // Extended specs — two structural variants Aajjo uses:
+        // A) Tab-pane: <div id="Specification" class="tab-pane">…tables inside…</div>
+        // B) Section heading: <h2 id="Specification">…</h2> then <table> as next siblings
+        const specSectionIds = ['Specification', 'TechnicalSpecification', 'technical-specification'];
+        for (const id of specSectionIds) {
+          const section = document.getElementById(id);
+          if (!section) continue;
+
+          // Variant A — content INSIDE the element (section wrapper).
+          // On Aajjo, #Specification wraps the ENTIRE detail area: product specs,
+          // description, AND company details are all siblings inside it.
+          // We must skip tables that appear AFTER #CompanyDetails or #Description
+          // in document order, because those belong to seller data, not product specs.
+          const companyBoundary = document.getElementById('CompanyDetails');
+          const descBoundary    = document.getElementById('Description');
+
+          const isAfterBoundary = (table: Element): boolean => {
+            // Node.DOCUMENT_POSITION_FOLLOWING = 4: the argument (table) comes after the reference node
+            if (companyBoundary && (companyBoundary.compareDocumentPosition(table) & 4)) return true;
+            if (descBoundary    && (descBoundary.compareDocumentPosition(table)    & 4)) return true;
+            return false;
+          };
+
+          const tablesInside = Array.from(section.querySelectorAll('table')).filter((t) => {
+            // Skip the basic spec table (already read above)
+            const cls = (t as HTMLElement).className ?? '';
+            if (cls.includes('service-chart-datails') || cls.includes('service-chart-details')) return false;
+            // Skip tables that follow the company or description boundary
+            if (isAfterBoundary(t)) return false;
+            return true;
+          });
+          if (tablesInside.length > 0) {
+            tablesInside.forEach((t) => readTable(t, 'extended'));
+            break;
+          }
+
+          // Variant B — content as next siblings of the heading/anchor
+          let node: Element | null = section.nextElementSibling;
+          let guard = 0;
+          while (node && guard < 8 && !isStopNode(node)) {
+            if (node.tagName === 'TABLE') readTable(node, 'extended');
+            else node.querySelectorAll('table').forEach((t) => readTable(t, 'extended'));
+            node = node.nextElementSibling;
+            guard++;
+          }
+          if (out.some((r) => r.section === 'extended')) break;
+        }
+
+        // Fallback: known table class anywhere outside CompanyDetails
+        if (!out.some((r) => r.section === 'extended')) {
+          document
+            .querySelectorAll('table.specification-chart-datails, table.specification-chart-details')
+            .forEach((t) => {
+              let parent = t.parentElement;
+              let inCompany = false;
+              while (parent) {
+                if (parent.id === 'CompanyDetails') { inCompany = true; break; }
+                parent = parent.parentElement;
+              }
+              if (!inCompany) readTable(t, 'extended');
+            });
+        }
+
+        return out;
+      });
+
+      for (const { key, val, section } of rows) {
+        if (!key || !val || key.length > 80) continue;
+        const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const dedupeKey = `${normKey}::${val}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        specs.push({ name: normKey, value: val, rawName: key, section, confidence: 90 });
+      }
+    } catch (e: any) {
+      this.logger.warn(`extractSpecs failed: ${e.message}`);
+    }
+
+    return specs;
+  }
+
+  // ── Description — content following the product description heading ────────
+  // Aajjo section heading is "Product Description"; the id may be "Description",
+  // "ProductDescription", etc. We try all variations and fall back to heading
+  // text search.
+
+  private async extractDescription(page: Page): Promise<string> {
+    try {
+      return await page.evaluate(() => {
+        // Collect text from INSIDE an element (tab-pane variant) or its siblings (heading variant)
+        const readElement = (el: Element | null): string => {
+          if (!el) return '';
+
+          // Variant A — el is a tab-pane: use its own innerText
+          const direct = (el as HTMLElement).innerText?.trim() ?? '';
+          if (direct.length > 20) return direct;
+
+          // Variant B — el is a heading anchor: collect following siblings
+          const parts: string[] = [];
+          let node: Element | null = el.nextElementSibling;
+          let guard = 0;
+          while (node && guard < 10 && !/^H[123]$/.test(node.tagName)) {
+            const text = (node as HTMLElement).innerText?.trim();
+            if (text && text.length > 10) parts.push(text);
+            node = node.nextElementSibling;
+            guard++;
+          }
+          return parts.join('\n\n').trim();
+        };
+
+        // 1. Try known id variations (covers both tab-pane and heading cases)
+        for (const id of [
+          'Description',
+          'ProductDescription',
+          'product-description',
+          'productDescription',
+          'ProductDesc',
+        ]) {
+          const el = document.getElementById(id);
+          if (el) {
+            const text = readElement(el);
+            if (text) return text;
+          }
+        }
+
+        // 2. Any heading whose text contains "description" or "about product"
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4'));
+        for (const h of headings) {
+          const txt = h.textContent?.toLowerCase() ?? '';
+          if (txt.includes('description') || txt.includes('about product')) {
+            const text = readElement(h);
+            if (text) return text;
+          }
+        }
+
+        // 3. CSS class fallbacks
+        for (const sel of [
+          '#product-description',
+          '.product-description',
+          '.about-product',
+          '.detail-description',
+          '[class*="description"]:not([class*="meta"])',
+        ]) {
+          const el = document.querySelector(sel);
+          const text = (el as HTMLElement | null)?.innerText?.trim();
+          if (text && text.length > 20) return text;
+        }
+
+        return '';
+      });
+    } catch (e: any) {
+      this.logger.warn(`extractDescription failed: ${e.message}`);
+      return '';
+    }
+  }
+
+  // ── Images: scope to current product, prefer ExtraLarge then Medium ───────
+
+  private async extractImages(page: Page): Promise<ImageRef[]> {
+    const images: ImageRef[] = [];
+    const seen = new Set<string>();
+
+    try {
+      const srcs = await page.evaluate(() => {
+        const allImgs = Array.from(document.querySelectorAll('img[src]')) as HTMLImageElement[];
+        return allImgs
+          .map((img) => ({
+            src: img.src,
+            isExtraLarge: img.src.includes('ExtraLarge'),
+            isMedium: img.src.includes('Medium'),
+            isLarge: img.src.includes('/Large/'),
+          }))
+          .filter((img) => img.isExtraLarge || img.isMedium || img.isLarge)
+          .sort((a, b) => (b.isExtraLarge ? 1 : 0) - (a.isExtraLarge ? 1 : 0));
+      });
+
+      for (const img of srcs) {
+        if (seen.has(img.src)) continue;
+        seen.add(img.src);
+        images.push({ originalUrl: img.src, isFeatured: img.isExtraLarge && images.length === 0 });
+        if (images.length >= 5) break;
+      }
+
+      if (!images.length) {
+        const fallback = await page.evaluate(() =>
+          (Array.from(document.querySelectorAll('img[src]')) as HTMLImageElement[])
+            .map((img) => img.src)
+            .filter((src) => src.startsWith('http') && (src.endsWith('.jpg') || src.endsWith('.png') || src.endsWith('.webp')))
+            .slice(0, 5),
+        );
+        fallback.forEach((src, i) => images.push({ originalUrl: src, isFeatured: i === 0 }));
+      }
+    } catch (e: any) {
+      this.logger.warn(`extractImages failed: ${e.message}`);
+    }
+
+    return images;
+  }
+
+  // ── Seller / company ──────────────────────────────────────────────────────
+  // Primary source: JSON-LD (Product → offers.seller, LocalBusiness)
+  // Supplemented by: #CompanyDetails table (GST, employees, turnover, etc.)
+
+  private async extractSeller(page: Page): Promise<SellerData> {
+    try {
+      const r = await page.evaluate(() => {
+        // ── 1. JSON-LD — most reliable structured source ──────────────────────
+        let jldSellerName = '';
+        let jldProfileUrl = '';
+        let jldAddress = '';
+        let jldCity = '';
+        let jldState = '';
+        let jldPhone = '';
+        let jldLogo = '';
+
+        const jldScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+        for (const script of jldScripts) {
+          try {
+            const data = JSON.parse(script.textContent ?? '{}');
+            const graphs: any[] = Array.isArray(data['@graph']) ? data['@graph'] : [data];
+            for (const g of graphs) {
+              // Product → offers.seller gives seller name + Aajjo store URL
+              if (g['@type'] === 'Product' && g.offers?.seller) {
+                jldSellerName = jldSellerName || (g.offers.seller.name ?? '');
+                jldProfileUrl = jldProfileUrl || (g.offers.seller.url ?? '');
+              }
+              // LocalBusiness gives address, phone, logo
+              if (g['@type'] === 'LocalBusiness') {
+                jldLogo    = jldLogo    || (g.image ?? '');
+                jldPhone   = jldPhone   || (g.telephone ?? '');
+                const addr = g.address ?? {};
+                jldAddress = jldAddress || (addr.streetAddress ?? '');
+                jldCity    = jldCity    || (addr.addressLocality ?? '').replace(/,\s*$/, '');
+                jldState   = jldState   || (addr.addressRegion ?? '');
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+
+        // ── 2. #CompanyDetails table — GST, employees, turnover, legal status ─
+        const heading = document.getElementById('CompanyDetails');
+        let table: Element | null = null;
+        if (heading) {
+          // Variant A: #CompanyDetails is a tab-pane (table inside)
+          table = heading.querySelector('table');
+          // Variant B: #CompanyDetails is a heading (table follows as sibling)
+          if (!table) {
+            let node: Element | null = heading.nextElementSibling;
+            let guard = 0;
+            while (node && guard < 6 && !table) {
+              if (node.tagName === 'TABLE') table = node;
+              else if (node.querySelector) table = node.querySelector('table');
+              if (/^H1$/.test(node.tagName)) break;
+              node = node.nextElementSibling;
+              guard++;
+            }
+          }
+        }
+
+        const rows: Record<string, string> = {};
+        table?.querySelectorAll('tr').forEach((tr) => {
+          const td = tr.querySelectorAll('td');
+          if (td.length >= 2) {
+            const k = td[0].textContent?.replace(/\s+/g, ' ').trim().toLowerCase() ?? '';
+            const v = td[1].textContent?.replace(/\s+/g, ' ').trim() ?? '';
+            if (k) rows[k] = v;
+          }
+        });
+
+        // GST from table, fallback to page text
+        const gstSpan = Array.from(document.querySelectorAll('span, p, div')).find((e) =>
+          /GST\s*(No|Number)/i.test(e.textContent ?? ''),
+        );
+        const gst =
+          rows['gst number'] ||
+          gstSpan?.textContent?.match(/\b([0-9A-Z]{15})\b/)?.[1] ||
+          '';
+
+        // Logo: prefer JSON-LD, fall back to DOM selectors
+        const logoDom = document.querySelector(
+          'img.detailLogo, img.ahataLgo, .logoWrapper img, img[class*="logo"]',
+        ) as HTMLImageElement | null;
+        const logo = jldLogo || logoDom?.src || '';
+
+        // Contact: prefer JSON-LD phone, fall back to table rows and page regex
+        const contactFromRows =
+          rows['contact person'] || rows['phone'] || rows['mobile'] ||
+          rows['contact no'] || rows['contact number'] || rows['telephone'] || '';
+        const phoneFromPage = (() => {
+          const m = (document.body.innerText ?? '').match(/(?:\+91[\s-]?)?[6-9]\d{9}/);
+          return m ? m[0] : '';
+        })();
+        const contactDetails = jldPhone || contactFromRows || phoneFromPage;
+
+        return {
+          rows,
+          gst,
+          sellerName: jldSellerName,
+          address:    jldAddress,
+          city:       jldCity,
+          state:      jldState,
+          profileUrl: jldProfileUrl,
+          logo,
+          contactDetails,
+        };
+      });
+
+      const yearStr = r.rows['year of establishment'] ?? '';
+      const year = parseInt(yearStr.match(/\d{4}/)?.[0] ?? '', 10);
+
+      return {
+        sellerName:       r.sellerName,
+        sellerLogoUrl:    r.logo,
+        gstNumber:        r.gst,
+        address:          [r.address, r.city].filter(Boolean).join(', ').slice(0, 500),
+        state:            r.state,
+        country:          'India',
+        businessType:     r.rows['nature of business'] ?? '',
+        yearsEstablished: isNaN(year) ? null : year,
+        numberOfEmployees: r.rows['number of employees'] ?? '',
+        turnover:         r.rows['turnover'] ?? r.rows['annual turnover'] ?? '',
+        legalStatus:      r.rows['legal status'] ?? '',
+        contactDetails:   r.contactDetails,
+        aajjoProfileUrl:  r.profileUrl,
+      };
+    } catch (e: any) {
+      this.logger.warn(`extractSeller failed: ${e.message}`);
+      return {
+        sellerName: '',
+        sellerLogoUrl: '',
+        gstNumber: '',
+        address: '',
+        state: '',
+        country: 'India',
+        businessType: '',
+        yearsEstablished: null,
+        numberOfEmployees: '',
+        turnover: '',
+        legalStatus: '',
+        contactDetails: '',
+        aajjoProfileUrl: '',
+      };
+    }
+  }
+
+  // ── Confidence score ──────────────────────────────────────────────────────
+
+  private computeConfidence(p: Partial<ExtractedProduct>): number {
+    const weights: { key: keyof ExtractedProduct; w: number }[] = [
+      { key: 'productName', w: 20 },
+      { key: 'price', w: 15 },
+      { key: 'category', w: 20 },
+      { key: 'specifications', w: 20 },
+      { key: 'images', w: 10 },
+      { key: 'seller', w: 10 },
+      { key: 'description', w: 5 },
+    ];
+    let score = 0;
+    for (const { key, w } of weights) {
+      const v = p[key];
+      if (!v) continue;
+      if (typeof v === 'string' && v.trim()) score += w;
+      else if (typeof v === 'number' && v > 0) score += w;
+      else if (Array.isArray(v) && v.length > 0) score += w;
+      else if (typeof v === 'object' && v !== null && (v as SellerData).sellerName) score += w;
+    }
+    return score;
+  }
+
+  // ── Main extraction entry ─────────────────────────────────────────────────
+
+  async extractProduct(page: Page, sourceUrl: string): Promise<ExtractedProduct> {
+    this.logger.debug(`Extracting ${sourceUrl}`);
+
+    // Activate tab panes so all content is in the DOM before we read it
+    await this.navigateProductTabs(page);
+    // Click "More Specifications" / "Show More" before reading specs
+    await this.expandSpecifications(page);
+
+    const [nameResult, priceResult, description, deliveryResult, warrantyResult] =
+      await Promise.all([
+        this.trySelectors(page, SELECTORS.productName),
+        this.trySelectors(page, SELECTORS.price),
+        this.extractDescription(page),
+        this.trySelectors(page, SELECTORS.deliveryInfo),
+        this.trySelectors(page, SELECTORS.warrantyInfo),
+      ]);
+
+    const [breadcrumb, moq, specs, images, seller] = await Promise.all([
+      this.extractBreadcrumb(page),
+      this.extractMoq(page),
+      this.extractSpecs(page),
+      this.extractImages(page),
+      this.extractSeller(page),
+    ]);
+
+    const { price, currency } = this.parsePrice(priceResult.value);
+
+    const product: ExtractedProduct = {
+      productName: nameResult.value || 'Unknown Product',
+      category: breadcrumb.category,
+      subCategory: breadcrumb.subCategory,
+      price,
+      currency,
+      moq,
+      description,
+      deliveryInformation: deliveryResult.value,
+      warrantyInformation: warrantyResult.value,
+      specifications: specs,
+      images,
+      seller,
+      sourceUrl,
+      confidenceScore: 0,
+    };
+
+    product.confidenceScore = this.computeConfidence(product);
+    this.logger.log(
+      `Extracted "${product.productName}" cat="${breadcrumb.category}" subCat="${breadcrumb.subCategory}" desc=${description.length}chars specs=${specs.length} images=${images.length} confidence=${product.confidenceScore}%`,
+    );
+
+    return product;
+  }
+}
