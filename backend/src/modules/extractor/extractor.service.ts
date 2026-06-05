@@ -109,42 +109,45 @@ export class ExtractorService {
   // fully in the DOM before we read it.
 
   private async navigateProductTabs(page: Page): Promise<void> {
+    // Aajjo product pages use anchor-hash tabs (#Specification, #Description,
+    // #CompanyDetails). Clicking them does NOT lazy-load content — all data is
+    // already in the DOM after domcontentloaded. We click each tab only to
+    // ensure any CSS-hidden tab-pane becomes visible before we read innerText.
+    // No waitForFunction needed; a short settle is enough.
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    const clickTabAndWait = async (selector: string): Promise<boolean> => {
+    const clickTab = async (selector: string): Promise<boolean> => {
       try {
         const el = await page.$(selector);
         if (!el) return false;
         await el.click();
-        await page
-          .waitForFunction(() => document.readyState === 'complete', { timeout: 4000 })
-          .catch(() => {});
-        await sleep(800);
+        await sleep(150); // minimal settle — no navigation triggered
         return true;
       } catch {
         return false;
       }
     };
 
-    // Specification tab
-    await clickTabAndWait('a[href="#Specification"]') ||
-      await clickTabAndWait('a[href="#TechnicalSpecification"]') ||
-      await clickTabAndWait('a[href="#technical-specification"]') ||
-      await clickTabAndWait('[data-toggle="tab"][href*="Spec"]') ||
-      await clickTabAndWait('[data-bs-toggle="tab"][href*="Spec"]');
+    // Click Specification tab (try both naming variants)
+    if (!await clickTab('a[href="#Specification"]')) {
+      await clickTab('a[href="#TechnicalSpecification"]') ||
+        await clickTab('[data-toggle="tab"][href*="Spec"]') ||
+        await clickTab('[data-bs-toggle="tab"][href*="Spec"]');
+    }
 
-    // Description tab
-    await clickTabAndWait('a[href="#Description"]') ||
-      await clickTabAndWait('a[href="#ProductDescription"]') ||
-      await clickTabAndWait('a[href="#product-description"]') ||
-      await clickTabAndWait('[data-toggle="tab"][href*="Description"]') ||
-      await clickTabAndWait('[data-bs-toggle="tab"][href*="Description"]');
+    // Click Description tab
+    if (!await clickTab('a[href="#Description"]')) {
+      await clickTab('a[href="#ProductDescription"]') ||
+        await clickTab('[data-toggle="tab"][href*="Description"]') ||
+        await clickTab('[data-bs-toggle="tab"][href*="Description"]');
+    }
 
-    // Company / Seller tab
-    await clickTabAndWait('a[href="#CompanyDetails"]') ||
-      await clickTabAndWait('a[href="#SellerDetails"]') ||
-      await clickTabAndWait('[data-toggle="tab"][href*="Company"]') ||
-      await clickTabAndWait('[data-bs-toggle="tab"][href*="Company"]');
+    // Click Company Details tab
+    if (!await clickTab('a[href="#CompanyDetails"]')) {
+      await clickTab('a[href="#SellerDetails"]') ||
+        await clickTab('[data-toggle="tab"][href*="Company"]') ||
+        await clickTab('[data-bs-toggle="tab"][href*="Company"]');
+    }
   }
 
   // ── Expand hidden specs — click "More Specifications" before reading ────────
@@ -214,6 +217,14 @@ export class ExtractorService {
         };
 
         // Strategy 0: JSON-LD BreadcrumbList — most structured, highest priority
+        // Aajjo sometimes encodes names as HTML entities inside JSON-LD (e.g. &amp;),
+        // so we decode via textarea before returning.
+        const decodeHtml = (str: string): string => {
+          if (!str.includes('&')) return str;
+          const ta = document.createElement('textarea');
+          ta.innerHTML = str;
+          return ta.value;
+        };
         const jsonLdScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
         for (const script of jsonLdScripts) {
           try {
@@ -222,7 +233,7 @@ export class ExtractorService {
             for (const g of graphs) {
               if (g['@type'] === 'BreadcrumbList' && Array.isArray(g.itemListElement)) {
                 const items: string[] = g.itemListElement
-                  .map((i: any) => (i.name ?? i.item?.name ?? '').trim())
+                  .map((i: any) => decodeHtml((i.name ?? i.item?.name ?? '').trim()))
                   .filter((n: string) => n && n.toLowerCase() !== 'home');
                 if (items.length >= 1) {
                   return { category: items[0] ?? '', subCategory: items[1] ?? '' };

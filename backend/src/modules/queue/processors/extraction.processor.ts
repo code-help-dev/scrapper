@@ -35,7 +35,11 @@ export interface ProcessImagePayload {
   images: { originalUrl: string; isFeatured: boolean }[];
 }
 
-@Processor(QUEUE_EXTRACTION)
+// lockDuration must exceed the worst-case single-product scrape time.
+// prepPage (≤5s) + tabs (≤1s) + extraction (≤5s) + delay (≤5s) ≈ 16s.
+// Add generous headroom → 120s. Default BullMQ lockDuration is 30s which
+// causes stall-retries on slower pages.
+@Processor(QUEUE_EXTRACTION, { lockDuration: 120000 })
 export class ExtractionProcessor extends WorkerHost {
   private readonly logger = new Logger(ExtractionProcessor.name);
 

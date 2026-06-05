@@ -8,7 +8,7 @@ import { Product } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ExternalLink, Flag } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Flag, Tag } from 'lucide-react';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +61,39 @@ export default function ProductDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-4">
+
+          {/* Category — always visible, first piece of product info */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                Category
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <tbody>
+                  <tr className="bg-muted/30">
+                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Category</td>
+                    <td className="px-4 py-2.5">
+                      {product.category
+                        ? <span className="font-medium">{product.category}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Sub-Category</td>
+                    <td className="px-4 py-2.5">
+                      {product.subCategory
+                        ? product.subCategory
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+
           {/* Images */}
           {product.images.length > 0 && (
             <Card>
@@ -89,31 +122,6 @@ export default function ProductDetailPage() {
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Category */}
-          {(product.category || product.subCategory) && (
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Category</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {product.category && (
-                      <tr className="bg-muted/30">
-                        <td className="px-4 py-2 font-medium w-40 text-muted-foreground">Category</td>
-                        <td className="px-4 py-2">{product.category}</td>
-                      </tr>
-                    )}
-                    {product.subCategory && (
-                      <tr>
-                        <td className="px-4 py-2 font-medium w-40 text-muted-foreground">Sub-Category</td>
-                        <td className="px-4 py-2">{product.subCategory}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
               </CardContent>
             </Card>
           )}

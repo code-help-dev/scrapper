@@ -193,38 +193,40 @@ export class JobsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Cancel a queued or paused job' })
+  @ApiOperation({ summary: 'Cancel a queued, paused, or processing job' })
   async cancel(@Param('id') id: string) {
     const job = await this.jobModel.findById(id).exec();
     if (!job) throw new NotFoundException('Job not found');
     if (
       job.status !== JobStatus.QUEUED &&
-      job.status !== JobStatus.PAUSED
+      job.status !== JobStatus.PAUSED &&
+      job.status !== JobStatus.PROCESSING
     ) {
       throw new BadRequestException(
-        `Only queued or paused jobs can be cancelled (current status: ${job.status})`,
+        `Only queued, paused, or processing jobs can be cancelled (current status: ${job.status})`,
       );
     }
 
     const bullJob = await this.extractionQueue.getJob(id);
-    if (bullJob) await bullJob.remove();
+    if (bullJob) await bullJob.remove().catch(() => {});
 
     await this.jobModel.findByIdAndUpdate(id, {
       status: JobStatus.FAILED,
       errorMessage: 'Cancelled by user',
+      completedAt: new Date(),
     });
   }
 
   // ── POST /api/jobs/:id/retry — retry failed job ───────────────────────────
 
   @Post(':id/retry')
-  @ApiOperation({ summary: 'Retry a failed extraction job' })
+  @ApiOperation({ summary: 'Retry a failed or re-scrape a completed extraction job' })
   async retry(@Param('id') id: string) {
     const job = await this.jobModel.findById(id).exec();
     if (!job) throw new NotFoundException('Job not found');
-    if (job.status !== JobStatus.FAILED) {
+    if (job.status !== JobStatus.FAILED && job.status !== JobStatus.COMPLETED) {
       throw new BadRequestException(
-        `Only failed jobs can be retried (current status: ${job.status})`,
+        `Only failed or completed jobs can be retried (current status: ${job.status})`,
       );
     }
 

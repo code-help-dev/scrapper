@@ -268,17 +268,19 @@ export default function JobsPage() {
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1">
-                        {job.status === 'failed' && (
+                        {/* Retry: failed or re-scrape completed */}
+                        {(job.status === 'failed' || job.status === 'completed') && (
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7"
-                            title="Retry"
+                            title={job.status === 'completed' ? 'Re-scrape' : 'Retry'}
                             onClick={() => retryMutation.mutate(job._id)}
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {/* Pause: queued only */}
                         {job.status === 'queued' && (
                           <Button
                             size="icon"
@@ -290,6 +292,7 @@ export default function JobsPage() {
                             <Pause className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {/* Resume: paused only */}
                         {job.status === 'paused' && (
                           <Button
                             size="icon"
@@ -301,7 +304,8 @@ export default function JobsPage() {
                             <Play className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {(job.status === 'queued' || job.status === 'paused') && (
+                        {/* Cancel: queued, paused, or processing (stuck) */}
+                        {(job.status === 'queued' || job.status === 'paused' || job.status === 'processing') && (
                           <Button
                             size="icon"
                             variant="ghost"

@@ -79,18 +79,24 @@ export class ScraperService {
     await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 })
       .catch(() => {}); // non-fatal — continue even if not complete
     await this.unlockHighResImages(page);
-    // Scroll to trigger lazy-load
+    // Scroll to trigger lazy-load.
+    // Cap at MAX_TICKS to prevent an infinite loop when lazy-loaded sections
+    // (e.g. Aajjo similar-products sidebar) keep expanding scrollHeight.
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => {
-        let total = 0;
+        const MAX_TICKS = 60; // 60 × 80 ms = 4.8 s ceiling
+        let ticks = 0;
         const timer = setInterval(() => {
           window.scrollBy(0, 300);
-          total += 300;
-          if (total >= document.body.scrollHeight) { clearInterval(timer); resolve(); }
+          ticks++;
+          if (ticks >= MAX_TICKS || window.scrollY + window.innerHeight >= document.body.scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
         }, 80);
       });
     });
-    await sleep(1500); // B6 fix: was page.waitForTimeout() which is deprecated
+    await sleep(800); // reduced from 1500 ms — content is already in DOM after domcontentloaded
   }
 
   async loadPage(url: string, retries = 3): Promise<ScrapedPage> {

@@ -10,7 +10,7 @@
 import { chromium } from 'playwright';
 
 const TARGET_URL =
-  'https://www.aajjo.com/product/electric-pizza-oven-size-smallmini-in-bhilai-suncross-bakery-equipment';
+  'https://www.aajjo.com/product/outdoor-multi-gym-in-meerut-ms-df-sports-industries';
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
@@ -155,6 +155,12 @@ async function main() {
     };
 
     // Strategy 0: JSON-LD
+    const decodeHtml = (str: string): string => {
+      if (!str.includes('&')) return str;
+      const ta = document.createElement('textarea');
+      ta.innerHTML = str;
+      return ta.value;
+    };
     for (const script of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
       try {
         const data = JSON.parse(script.textContent ?? '{}');
@@ -162,7 +168,7 @@ async function main() {
         for (const g of graphs) {
           if (g['@type'] === 'BreadcrumbList' && Array.isArray(g.itemListElement)) {
             const items: string[] = g.itemListElement
-              .map((i: any) => (i.name ?? i.item?.name ?? '').trim())
+              .map((i: any) => decodeHtml((i.name ?? i.item?.name ?? '').trim()))
               .filter((n: string) => n && n.toLowerCase() !== 'home');
             if (items.length >= 1) return { strategy: 'json-ld', category: items[0] ?? '', subCategory: items[1] ?? '' };
           }
