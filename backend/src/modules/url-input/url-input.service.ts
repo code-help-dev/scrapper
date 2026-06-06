@@ -18,7 +18,7 @@ import { QUEUE_EXTRACTION, JOB_SCRAPE_URL } from '../queue/queue.constants';
 import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
 
 const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\//i;
-// B2 fix: product URLs always have /product/ in the path
+// Individual product pages always have /product/ in the path on aajjo.com
 const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 const MAX_BULK = 500;
 
@@ -170,14 +170,36 @@ export class UrlInputService {
     for (const url of urls) {
       try {
         this.validateAajjoUrl(url);
-        await this.checkDuplicate(url);
 
         if (!this.isProductUrl(url)) {
-          // For bulk: skip category pages, only accept direct product URLs
-          skipped.push({ url, reason: 'Not a product URL — bulk mode only accepts /product/ URLs' });
+          // Category/listing page — only block if there is already an active job for this URL.
+          // Do NOT check productModel: category URLs are never saved as products so the check
+          // would only block if the old code incorrectly created a product record for this URL.
+          const activeJob = await this.jobModel
+            .exists({ sourceUrl: url, status: { $in: ['queued', 'processing'] } })
+            .exec();
+          if (activeJob) {
+            skipped.push({ url, reason: `This URL already has an active discovery job in the queue: ${url}` });
+            continue;
+          }
+
+          const discoveryJob = new this.jobModel({
+            sourceUrl: url,
+            jobType: JobType.BULK,
+            status: JobStatus.QUEUED,
+            submittedBy: new Types.ObjectId(userId),
+          });
+          await discoveryJob.save();
+          await this.extractionQueue.add(
+            JOB_SCRAPE_URL,
+            { jobId: discoveryJob.id, sourceUrl: url, userId, isDiscovery: true } satisfies ScrapeUrlPayload,
+            { jobId: discoveryJob.id },
+          );
+          queued.push(discoveryJob);
           continue;
         }
 
+        await this.checkDuplicate(url);
         const job = await this.enqueueProductUrl(url, userId, JobType.BULK);
         queued.push(job);
       } catch (err: any) {

@@ -74,7 +74,7 @@ export class UrlInputController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 }), // 2 MB
-          new FileTypeValidator({ fileType: /(text\/csv|text\/plain|application\/octet-stream)/ }),
+          new FileTypeValidator({ fileType: /(text\/csv|text\/plain|application\/octet-stream)/, skipMagicNumbersValidation: true }),
         ],
       }),
     )
