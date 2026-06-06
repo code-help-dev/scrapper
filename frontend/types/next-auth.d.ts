@@ -23,5 +23,13 @@ declare module 'next-auth/jwt' {
     role: string;
     accessToken: string;
     refreshToken: string;
+    accessTokenExpires: number;
+    error?: string;
+  }
+}
+
+declare module 'next-auth' {
+  interface Session {
+    error?: string;
   }
 }

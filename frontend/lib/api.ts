@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getSession } from 'next-auth/react';
+import { getSession, signOut } from 'next-auth/react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
@@ -13,6 +13,20 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// On 401, force a session re-check; if the session error flag is set redirect to login
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const session = await getSession();
+      if (!session || (session as any).error === 'RefreshAccessTokenError') {
+        await signOut({ redirect: true, callbackUrl: '/login' });
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 export const authApi = {

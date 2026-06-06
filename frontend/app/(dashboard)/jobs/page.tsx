@@ -9,12 +9,11 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   RotateCcw,
   XCircle,
-  ChevronLeft,
-  ChevronRight,
   Pause,
   Play,
   Search,
 } from 'lucide-react';
+import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -326,32 +325,13 @@ export default function JobsPage() {
 
           {/* Pagination */}
           {data && data.meta.pages > 1 && (
-            <div className="flex items-center justify-between p-3 border-t">
-              <p className="text-xs text-muted-foreground">
-                {data.meta.total.toLocaleString()} total — page {data.meta.page} of{' '}
-                {data.meta.pages}
-              </p>
-              <div className="flex gap-1">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === data.meta.pages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
+            <SmartPagination
+              currentPage={page}
+              totalPages={data.meta.pages}
+              totalItems={data.meta.total}
+              onPageChange={setPage}
+              className="p-3 border-t"
+            />
           )}
         </CardContent>
       </Card>

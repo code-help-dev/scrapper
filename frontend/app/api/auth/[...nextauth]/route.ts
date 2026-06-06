@@ -4,6 +4,26 @@ import axios from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
+// 7-day access token lifetime minus 5-minute buffer before triggering refresh
+const ACCESS_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000 - 5 * 60 * 1000;
+
+async function refreshAccessToken(token: any) {
+  try {
+    const { data } = await axios.post(`${API_BASE}/auth/refresh`, {
+      userId: token.id as string,
+      refresh_token: token.refreshToken as string,
+    });
+    return {
+      ...token,
+      accessToken: data.access_token,
+      accessTokenExpires: Date.now() + ACCESS_TOKEN_TTL_MS,
+      error: undefined,
+    };
+  } catch {
+    return { ...token, error: 'RefreshAccessTokenError' };
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -35,17 +55,28 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        // Initial sign-in: store tokens and expiry
         token.id = user.id;
         token.role = (user as any).role;
         token.accessToken = (user as any).accessToken;
         token.refreshToken = (user as any).refreshToken;
+        token.accessTokenExpires = Date.now() + ACCESS_TOKEN_TTL_MS;
+        return token;
       }
-      return token;
+
+      // Token still valid — return as-is
+      if (Date.now() < (token.accessTokenExpires as number)) {
+        return token;
+      }
+
+      // Access token expired — silently refresh using the refresh token
+      return refreshAccessToken(token);
     },
     async session({ session, token }) {
       session.user.id = token.id as string;
       session.user.role = token.role as string;
       (session as any).accessToken = token.accessToken;
+      (session as any).error = token.error;
       return session;
     },
   },

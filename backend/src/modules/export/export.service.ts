@@ -67,19 +67,24 @@ export class ExportService {
 
   private readonly CSV_BASE_COLUMNS = [
     'id', 'productName', 'category', 'subCategory', 'price', 'currency',
-    'moq', 'description', 'sellerName', 'imageUrls', 'sourceUrl', 'confidenceScore',
+    'moq', 'description', 'deliveryInformation', 'warrantyInformation',
+    'extractionStatus', 'isFlagged', 'sourcePlatform', 'sourceUrl', 'confidenceScore',
+    'sellerName', 'sellerLogoUrl', 'sellerGstNumber', 'sellerAddress', 'sellerState',
+    'sellerCountry', 'sellerBusinessType', 'sellerYearsEstablished', 'sellerEmployees',
+    'sellerTurnover', 'sellerLegalStatus', 'sellerContact', 'sellerProfileUrl',
+    'imageUrls', 'thumbnailUrls',
   ];
 
   private generateCsv(products: ProductDocument[]): Buffer {
     if (!products.length) {
-      // Return header-only row so the file is readable, not a 0-byte blob
       return Buffer.from(this.CSV_BASE_COLUMNS.join(',') + '\n', 'utf-8');
     }
 
     const rows = products.map((p) => {
+      const s = (p.seller as any) ?? {};
       const specFlat: Record<string, string> = {};
-      (p.specifications ?? []).forEach((s: any) => {
-        specFlat[`spec_${s.name}`] = s.value;
+      (p.specifications ?? []).forEach((spec: any) => {
+        specFlat[`spec_${spec.name}`] = spec.value;
       });
       return {
         id: (p as any)._id.toString(),
@@ -90,10 +95,28 @@ export class ExportService {
         currency: p.currency,
         moq: p.moq,
         description: p.description,
-        sellerName: (p.seller as any)?.sellerName ?? '',
-        imageUrls: (p.images ?? []).map((i: any) => i.storageUrl).join('|'),
+        deliveryInformation: p.deliveryInformation ?? '',
+        warrantyInformation: p.warrantyInformation ?? '',
+        extractionStatus: p.extractionStatus,
+        isFlagged: p.isFlagged,
+        sourcePlatform: p.sourcePlatform ?? '',
         sourceUrl: p.sourceUrl,
         confidenceScore: p.confidenceScore,
+        sellerName: s.sellerName ?? '',
+        sellerLogoUrl: s.sellerLogoUrl ?? '',
+        sellerGstNumber: s.gstNumber ?? '',
+        sellerAddress: s.address ?? '',
+        sellerState: s.state ?? '',
+        sellerCountry: s.country ?? '',
+        sellerBusinessType: s.businessType ?? '',
+        sellerYearsEstablished: s.yearsEstablished ?? '',
+        sellerEmployees: s.numberOfEmployees ?? '',
+        sellerTurnover: s.turnover ?? '',
+        sellerLegalStatus: s.legalStatus ?? '',
+        sellerContact: s.contactDetails ?? '',
+        sellerProfileUrl: s.aajjoProfileUrl ?? '',
+        imageUrls: (p.images ?? []).map((i: any) => i.storageUrl).join('|'),
+        thumbnailUrls: (p.images ?? []).map((i: any) => i.thumbnailUrl).join('|'),
         ...specFlat,
       };
     });
@@ -119,6 +142,12 @@ export class ExportService {
       { header: 'Price', key: 'price', width: 12 },
       { header: 'Currency', key: 'currency', width: 10 },
       { header: 'MOQ', key: 'moq', width: 10 },
+      { header: 'Description', key: 'description', width: 60 },
+      { header: 'Delivery Info', key: 'deliveryInformation', width: 40 },
+      { header: 'Warranty Info', key: 'warrantyInformation', width: 40 },
+      { header: 'Extraction Status', key: 'extractionStatus', width: 18 },
+      { header: 'Flagged', key: 'isFlagged', width: 10 },
+      { header: 'Source Platform', key: 'sourcePlatform', width: 16 },
       { header: 'Source URL', key: 'sourceUrl', width: 60 },
       { header: 'Confidence', key: 'confidenceScore', width: 12 },
     ];
@@ -132,6 +161,12 @@ export class ExportService {
         price: p.price,
         currency: p.currency,
         moq: p.moq,
+        description: p.description,
+        deliveryInformation: p.deliveryInformation ?? '',
+        warrantyInformation: p.warrantyInformation ?? '',
+        extractionStatus: p.extractionStatus,
+        isFlagged: p.isFlagged,
+        sourcePlatform: p.sourcePlatform ?? '',
         sourceUrl: p.sourceUrl,
         confidenceScore: p.confidenceScore,
       }),
@@ -192,10 +227,18 @@ export class ExportService {
     ws4.columns = [
       { header: 'Product ID', key: 'productId', width: 26 },
       { header: 'Seller Name', key: 'sellerName', width: 30 },
+      { header: 'Logo URL', key: 'sellerLogoUrl', width: 60 },
       { header: 'GST', key: 'gstNumber', width: 20 },
       { header: 'Address', key: 'address', width: 50 },
       { header: 'State', key: 'state', width: 20 },
       { header: 'Country', key: 'country', width: 15 },
+      { header: 'Business Type', key: 'businessType', width: 20 },
+      { header: 'Years Established', key: 'yearsEstablished', width: 18 },
+      { header: 'Employees', key: 'numberOfEmployees', width: 15 },
+      { header: 'Turnover', key: 'turnover', width: 20 },
+      { header: 'Legal Status', key: 'legalStatus', width: 20 },
+      { header: 'Contact', key: 'contactDetails', width: 30 },
+      { header: 'Aajjo Profile URL', key: 'aajjoProfileUrl', width: 60 },
     ];
     ws4.getRow(1).font = { bold: true };
     products.forEach((p) => {
@@ -203,10 +246,18 @@ export class ExportService {
       ws4.addRow({
         productId: (p as any)._id.toString(),
         sellerName: s?.sellerName ?? '',
+        sellerLogoUrl: s?.sellerLogoUrl ?? '',
         gstNumber: s?.gstNumber ?? '',
         address: s?.address ?? '',
         state: s?.state ?? '',
         country: s?.country ?? '',
+        businessType: s?.businessType ?? '',
+        yearsEstablished: s?.yearsEstablished ?? '',
+        numberOfEmployees: s?.numberOfEmployees ?? '',
+        turnover: s?.turnover ?? '',
+        legalStatus: s?.legalStatus ?? '',
+        contactDetails: s?.contactDetails ?? '',
+        aajjoProfileUrl: s?.aajjoProfileUrl ?? '',
       });
     });
 

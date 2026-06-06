@@ -11,14 +11,12 @@ import {
   PaginatedResponse,
 } from '@/types';
 import {
-  ChevronLeft,
-  ChevronRight,
   Flag,
   ImageOff,
   Package,
   LayoutGrid,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -318,54 +316,13 @@ export default function ProductsPage() {
 
           {/* Pagination */}
           {data && totalPages > 1 && (
-            <div className="flex items-center justify-between border-t pt-4">
-              <p className="text-xs text-muted-foreground">
-                Page {data.meta.page} of {totalPages} &nbsp;·&nbsp; {totalProducts.toLocaleString()} total
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === 1}
-                  onClick={() => setPage(1)}
-                >
-                  <ChevronLeft className="h-3 w-3" />
-                  <ChevronLeft className="h-3 w-3 -ml-2.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <span className="px-2 text-xs font-medium tabular-nums">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  disabled={page === totalPages}
-                  onClick={() => setPage(totalPages)}
-                >
-                  <ChevronRight className="h-3 w-3" />
-                  <ChevronRight className="h-3 w-3 -ml-2.5" />
-                </Button>
-              </div>
-            </div>
+            <SmartPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalProducts}
+              onPageChange={setPage}
+              className="border-t pt-4"
+            />
           )}
         </div>
       </div>
