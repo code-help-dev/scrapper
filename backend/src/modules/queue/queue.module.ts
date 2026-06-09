@@ -11,6 +11,7 @@ import { ExtractionProcessor } from './processors/extraction.processor';
 import { ImageProcessor } from './processors/image.processor';
 import { ExportProcessor } from './processors/export.processor';
 import { QueueRecoveryService } from './queue-recovery.service';
+import { QueueAdminController } from './queue-admin.controller';
 import {
   QUEUE_EXTRACTION,
   QUEUE_IMAGE,
@@ -48,6 +49,7 @@ import {
     NormalizationModule,
     ExportModule,
   ],
+  controllers: [QueueAdminController],
   providers: [ExtractionProcessor, ImageProcessor, ExportProcessor, QueueRecoveryService],
   exports: [BullModule],
 })

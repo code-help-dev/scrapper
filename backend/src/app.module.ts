@@ -17,6 +17,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { ProductsModule } from './modules/products/products.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CacheModule } from './modules/cache/cache.module';
+import { SchematestModule } from './modules/schematest/schematest.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { CacheModule } from './modules/cache/cache.module';
     ExportModule,
     ProductsModule,
     DashboardModule,
+    SchematestModule,
   ],
 })
 export class AppModule {}
