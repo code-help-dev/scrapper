@@ -13,6 +13,9 @@ import {
   Sse,
   MessageEvent,
 } from '@nestjs/common';
+
+// Matches the same pattern used in url-input.service.ts
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Model } from 'mongoose';
@@ -182,6 +185,7 @@ export class JobsController {
         jobId: id,
         sourceUrl: job.sourceUrl,
         userId: job.submittedBy.toString(),
+        isDiscovery: !AAJJO_PRODUCT_RE.test(job.sourceUrl),
       } satisfies ScrapeUrlPayload,
       { jobId: id },
     );
@@ -235,6 +239,7 @@ export class JobsController {
       errorMessage: null,
       processedCount: 0,
       failedCount: 0,
+      totalProducts: 0,
     });
 
     await this.extractionQueue.add(
@@ -243,6 +248,7 @@ export class JobsController {
         jobId: id,
         sourceUrl: job.sourceUrl,
         userId: job.submittedBy.toString(),
+        isDiscovery: !AAJJO_PRODUCT_RE.test(job.sourceUrl),
       } satisfies ScrapeUrlPayload,
       { jobId: id },
     );

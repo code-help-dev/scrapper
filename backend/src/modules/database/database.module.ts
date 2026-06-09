@@ -6,6 +6,7 @@ import { Product, ProductSchema } from './schemas/product.schema';
 import { Category, CategorySchema } from './schemas/category.schema';
 import { ExtractionJob, ExtractionJobSchema } from './schemas/extraction-job.schema';
 import { ExportJob, ExportJobSchema } from './schemas/export-job.schema';
+import { Seller, SellerSchema } from './schemas/seller.schema';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ExportJob, ExportJobSchema } from './schemas/export-job.schema';
       { name: Category.name, schema: CategorySchema },
       { name: ExtractionJob.name, schema: ExtractionJobSchema },
       { name: ExportJob.name, schema: ExportJobSchema },
+      { name: Seller.name, schema: SellerSchema },
     ]),
   ],
   exports: [MongooseModule],

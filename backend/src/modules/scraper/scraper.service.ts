@@ -207,16 +207,57 @@ export class ScraperService {
 
     // Collect product URLs currently in the DOM (strip #fragment / ?query so
     // the same product linked twice — image + title — dedupes cleanly).
+    //
+    // Aajjo has two URL structures for product links:
+    //   1. /product/{slug}  — used on some pages
+    //   2. /{category}/{sub-category}/{product-slug}  — used on sub-category listing pages
+    // We detect case (2) by grabbing all <a> tags whose href shares the listing
+    // URL as a prefix and has at least one additional path segment.
     const collect = async () => {
-      const found: string[] = await page.evaluate(() =>
-        (Array.from(document.querySelectorAll('a[href*="/product/"]')) as HTMLAnchorElement[])
+      const found: string[] = await page.evaluate((listing) => {
+        const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+        return anchors
           .map((a) => a.href)
-          .filter((h) => /aajjo\.com\/product\//i.test(h)),
-      );
+          .filter((h) => {
+            if (!/aajjo\.com/i.test(h)) return false;
+            if (/aajjo\.com\/product\//i.test(h)) return true;
+            try {
+              const base = new URL(listing);
+              const candidate = new URL(h);
+              if (candidate.hostname !== base.hostname) return false;
+              const basePath = base.pathname.replace(/\/$/, '');
+              const candPath = candidate.pathname.replace(/\/$/, '');
+              if (!candPath.startsWith(basePath + '/')) return false;
+              const extra = candPath.slice(basePath.length + 1);
+              return extra.length > 0 && !extra.startsWith('page/') && !extra.startsWith('filter/');
+            } catch {
+              return false;
+            }
+          });
+      }, listingUrl);
       found.forEach((u) => urls.add(u.split('#')[0].split('?')[0]));
     };
     const anchorCount = () =>
-      page.evaluate(() => document.querySelectorAll('a[href*="/product/"]').length);
+      page.evaluate((listing) => {
+        const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+        return anchors.filter((a) => {
+          const h = a.href;
+          if (!/aajjo\.com/i.test(h)) return false;
+          if (/aajjo\.com\/product\//i.test(h)) return true;
+          try {
+            const base = new URL(listing);
+            const candidate = new URL(h);
+            if (candidate.hostname !== base.hostname) return false;
+            const basePath = base.pathname.replace(/\/$/, '');
+            const candPath = candidate.pathname.replace(/\/$/, '');
+            if (!candPath.startsWith(basePath + '/')) return false;
+            const extra = candPath.slice(basePath.length + 1);
+            return extra.length > 0 && !extra.startsWith('page/') && !extra.startsWith('filter/');
+          } catch {
+            return false;
+          }
+        }).length;
+      }, listingUrl);
 
     try {
       await page.goto(listingUrl, { waitUntil: 'domcontentloaded', timeout });

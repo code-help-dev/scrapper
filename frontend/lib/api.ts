@@ -126,6 +126,31 @@ export const exportApi = {
   },
 };
 
+// ── Sellers ───────────────────────────────────────────────────────────────
+export const sellersApi = {
+  list: (params?: { page?: number; limit?: number; search?: string }) =>
+    api.get('/sellers', { params }),
+  get: (sellerName: string) =>
+    api.get(`/sellers/${encodeURIComponent(sellerName)}`),
+  categories: (sellerName: string) =>
+    api.get(`/sellers/${encodeURIComponent(sellerName)}/categories`),
+  subcategories: (sellerName: string, category: string) =>
+    api.get(`/sellers/${encodeURIComponent(sellerName)}/subcategories`, {
+      params: { category },
+    }),
+  products: (
+    sellerName: string,
+    params?: {
+      page?: number;
+      limit?: number;
+      category?: string;
+      subCategory?: string;
+      sortBy?: string;
+      sortOrder?: string;
+    },
+  ) => api.get(`/sellers/${encodeURIComponent(sellerName)}/products`, { params }),
+};
+
 // ── Dashboard ─────────────────────────────────────────────────────────────
 export const dashboardApi = {
   stats: () => api.get('/dashboard/stats'),

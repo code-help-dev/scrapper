@@ -7,6 +7,7 @@ import { ExtractorModule } from '../extractor/extractor.module';
 import { ImageModule } from '../image/image.module';
 import { NormalizationModule } from '../normalization/normalization.module';
 import { ExportModule } from '../export/export.module';
+import { SellersModule } from '../sellers/sellers.module';
 import { ExtractionProcessor } from './processors/extraction.processor';
 import { ImageProcessor } from './processors/image.processor';
 import { ExportProcessor } from './processors/export.processor';
@@ -48,6 +49,7 @@ import {
     ImageModule,
     NormalizationModule,
     ExportModule,
+    SellersModule,
   ],
   controllers: [QueueAdminController],
   providers: [ExtractionProcessor, ImageProcessor, ExportProcessor, QueueRecoveryService],

@@ -107,6 +107,24 @@ export interface SubcategoryInfo {
   productCount: number;
 }
 
+// ── Sellers ───────────────────────────────────────────────────────────────
+export interface Seller {
+  sellerName: string;
+  sellerLogoUrl: string;
+  state: string;
+  country: string;
+  businessType: string;
+  productCount: number;
+  gstNumber?: string;
+  address?: string;
+  yearsEstablished?: number | null;
+  numberOfEmployees?: string;
+  turnover?: string;
+  legalStatus?: string;
+  contactDetails?: string;
+  aajjoProfileUrl?: string;
+}
+
 // ── Export ────────────────────────────────────────────────────────────────
 export type ExportFormat = 'csv' | 'xlsx' | 'json' | 'shopify_csv' | 'woocommerce_xml';
 export type ExportStatus = 'queued' | 'processing' | 'completed' | 'failed';

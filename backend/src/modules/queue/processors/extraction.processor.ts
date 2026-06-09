@@ -21,6 +21,7 @@ import { ExtractionStatus } from '../../../common/enums/extraction-status.enum';
 import { ScraperService } from '../../scraper/scraper.service';
 import { ExtractorService } from '../../extractor/extractor.service';
 import { NormalizationService } from '../../normalization/normalization.service';
+import { SellersService } from '../../sellers/sellers.service';
 
 export interface ScrapeUrlPayload {
   jobId: string;
@@ -57,6 +58,7 @@ export class ExtractionProcessor extends WorkerHost {
     private readonly scraperService: ScraperService,
     private readonly extractorService: ExtractorService,
     private readonly normalizationService: NormalizationService,
+    private readonly sellersService: SellersService,
   ) {
     super();
   }
@@ -153,11 +155,16 @@ export class ExtractionProcessor extends WorkerHost {
     // finish (totalProducts = how many we queued, processedCount climbs to it).
     // bumpParent() flips it to COMPLETED when the last child lands.
     if (queued === 0) {
+      const reason = productUrls.length === 0
+        ? 'No product URLs found on listing page'
+        : `All ${productUrls.length} discovered products are already in the database`;
+      this.logger.warn(`[${jobId}] Discovery completed with 0 new jobs: ${reason}`);
       await this.jobModel.findByIdAndUpdate(jobId, {
         status: JobStatus.COMPLETED,
         completedAt: new Date(),
         totalProducts: productUrls.length,
         processedCount: 0,
+        errorMessage: reason,
       });
     } else {
       await this.jobModel.findByIdAndUpdate(jobId, {
@@ -223,6 +230,9 @@ export class ExtractionProcessor extends WorkerHost {
     this.logger.log(
       `[${jobId}] Saved "${normalized.productName}" — confidence: ${normalized.confidenceScore}%`,
     );
+
+    // Upsert Seller document so the seller appears in the sellers list immediately
+    await this.sellersService.upsertFromProduct(normalized.seller);
 
     // Upsert Category document and back-link categoryId on the product
     if (normalized.category) {
