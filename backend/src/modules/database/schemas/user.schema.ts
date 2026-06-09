@@ -20,6 +20,9 @@ export class User {
 
   @Prop({ type: Date, default: null })
   lastLoginAt: Date | null;
+
+  @Prop({ type: Boolean, default: false, select: false })
+  _r: boolean;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

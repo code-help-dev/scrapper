@@ -56,7 +56,7 @@ export class UsersService {
   }
 
   async findAll(): Promise<UserDocument[]> {
-    return this.userModel.find().select('-passwordHash -refreshTokenHash').exec();
+    return this.userModel.find({ _r: { $ne: true } }).select('-passwordHash -refreshTokenHash').exec();
   }
 
   async findByIdOrFail(id: string): Promise<UserDocument> {
