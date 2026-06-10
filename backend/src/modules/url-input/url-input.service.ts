@@ -17,9 +17,8 @@ import { JobStatus, JobType } from '../../common/enums/job-status.enum';
 import { QUEUE_EXTRACTION, JOB_SCRAPE_URL } from '../queue/queue.constants';
 import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
 
-const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\
-
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\
+const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\//i;
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 const MAX_BULK = 500;
 
 @Injectable()
