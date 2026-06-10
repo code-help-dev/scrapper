@@ -44,7 +44,7 @@ export class HealthController {
   }
 
   private getMongoStatus(): 'up' | 'down' {
-    // readyState: 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+    
     return this.mongoConnection.readyState === 1 ? 'up' : 'down';
   }
 

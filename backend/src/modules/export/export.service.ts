@@ -15,6 +15,7 @@ import { ExportFormat, ExportStatus } from '../../common/enums/export-format.enu
 export interface ExportFilters {
   category?: string;
   subCategory?: string;
+  seller?: string;
   dateFrom?: Date;
   dateTo?: Date;
   status?: string;
@@ -37,10 +38,8 @@ export class ExportService {
     fs.mkdirSync(this.storagePath, { recursive: true });
   }
 
-  // ── Query products with filters ───────────────────────────────────────────
-
   private async queryProducts(filters: ExportFilters): Promise<ProductDocument[]> {
-    // Explicit product selection takes precedence over filters.
+    
     if (filters.productIds?.length) {
       const ids = filters.productIds
         .filter((id) => Types.ObjectId.isValid(id))
@@ -54,6 +53,7 @@ export class ExportService {
     const query: Record<string, unknown> = { extractionStatus: 'completed' };
     if (filters.category) query.category = { $regex: `^${filters.category}$`, $options: 'i' };
     if (filters.subCategory) query.subCategory = { $regex: `^${filters.subCategory}$`, $options: 'i' };
+    if (filters.seller) query['seller.sellerName'] = { $regex: `^${filters.seller}$`, $options: 'i' };
     if (filters.status) query.extractionStatus = filters.status;
     if (filters.dateFrom || filters.dateTo) {
       query.createdAt = {};
@@ -62,8 +62,6 @@ export class ExportService {
     }
     return this.productModel.find(query).lean().exec() as unknown as Promise<ProductDocument[]>;
   }
-
-  // ── CSV export ────────────────────────────────────────────────────────────
 
   private readonly CSV_BASE_COLUMNS = [
     'id', 'productName', 'category', 'subCategory', 'price', 'currency',
@@ -125,14 +123,11 @@ export class ExportService {
     return Buffer.from(output, 'utf-8');
   }
 
-  // ── Excel export ──────────────────────────────────────────────────────────
-
   private async generateExcel(products: ProductDocument[]): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Aajjo Scraper';
     wb.created = new Date();
 
-    // Sheet 1: Products
     const ws1 = wb.addWorksheet('Products');
     ws1.columns = [
       { header: 'ID', key: 'id', width: 26 },
@@ -172,7 +167,6 @@ export class ExportService {
       }),
     );
 
-    // Sheet 2: Specifications
     const ws2 = wb.addWorksheet('Specifications');
     ws2.columns = [
       { header: 'Product ID', key: 'productId', width: 26 },
@@ -196,7 +190,6 @@ export class ExportService {
       ),
     );
 
-    // Sheet 3: Images
     const ws3 = wb.addWorksheet('Images');
     ws3.columns = [
       { header: 'Product ID', key: 'productId', width: 26 },
@@ -222,7 +215,6 @@ export class ExportService {
       ),
     );
 
-    // Sheet 4: Sellers
     const ws4 = wb.addWorksheet('Sellers');
     ws4.columns = [
       { header: 'Product ID', key: 'productId', width: 26 },
@@ -264,13 +256,9 @@ export class ExportService {
     return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 
-  // ── JSON export ────────────────────────────────────────────────────────────
-
   private generateJson(products: ProductDocument[]): Buffer {
     return Buffer.from(JSON.stringify(products, null, 2), 'utf-8');
   }
-
-  // ── Shopify CSV export ─────────────────────────────────────────────────────
 
   private readonly SHOPIFY_COLUMNS = [
     'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Product Category', 'Type',
@@ -294,7 +282,6 @@ export class ExportService {
         .map((s: any) => `${s.name}:${s.value}`)
         .join(',');
 
-      // One row per product (Shopify format)
       rows.push({
         Handle: (p.productName ?? '')
           .toLowerCase()
@@ -315,7 +302,6 @@ export class ExportService {
         'Metafield: custom.source_url [single_line_text_field]': p.sourceUrl,
       });
 
-      // Additional image rows
       images.slice(1).forEach((img: any) => {
         rows.push({
           Handle: (p.productName ?? '')
@@ -330,8 +316,6 @@ export class ExportService {
 
     return Buffer.from(stringify(rows, { header: true }), 'utf-8');
   }
-
-  // ── WooCommerce XML export ─────────────────────────────────────────────────
 
   private generateWooCommerceXml(products: ProductDocument[]): Buffer {
     const root = xmlCreate({ version: '1.0', encoding: 'UTF-8' })
@@ -380,8 +364,6 @@ export class ExportService {
     return Buffer.from(root.end({ prettyPrint: true }), 'utf-8');
   }
 
-  // ── Generate buffer for direct streaming (no DB record, no disk write) ──────
-
   async generateBuffer(
     format: ExportFormat,
     filters: ExportFilters,
@@ -429,8 +411,6 @@ export class ExportService {
     );
     return { buffer, fileName, contentType };
   }
-
-  // ── Orchestrate export job ────────────────────────────────────────────────
 
   async generateExport(
     exportJobId: string,

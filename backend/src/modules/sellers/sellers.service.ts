@@ -13,10 +13,6 @@ export class SellersService {
     private readonly sellerModel: Model<SellerDocument>,
   ) {}
 
-  /**
-   * Called by the extraction processor after every successful product save.
-   * Creates the seller if new, or updates their profile info if changed.
-   */
   async upsertFromProduct(seller: SellerData): Promise<void> {
     if (!seller?.sellerName?.trim()) return;
 

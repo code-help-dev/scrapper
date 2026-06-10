@@ -40,12 +40,11 @@ class TriggerExportDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() category?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() subCategory?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() seller?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateFrom?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateTo?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
 
-  // Explicit product selection — when present, exports exactly these products
-  // (other filters are ignored). Empty/absent → filter-based export.
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -66,8 +65,6 @@ export class ExportController {
     private readonly exportService: ExportService,
   ) {}
 
-  // ── POST /api/export — trigger export job ────────────────────────────────
-
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Trigger an export — returns export job ID' })
@@ -79,6 +76,7 @@ export class ExportController {
     const filters = {
       category: dto.category,
       subCategory: dto.subCategory,
+      seller: dto.seller,
       dateFrom: dto.dateFrom ? new Date(dto.dateFrom) : undefined,
       dateTo: dto.dateTo ? new Date(dto.dateTo) : undefined,
       status: dto.status,
@@ -111,8 +109,6 @@ export class ExportController {
     };
   }
 
-  // ── GET /api/export — export history ─────────────────────────────────────
-
   @Get()
   @ApiOperation({ summary: 'Export job history' })
   async findAll(@CurrentUser() user: { id: string }) {
@@ -124,8 +120,6 @@ export class ExportController {
       .exec();
     return { data: jobs };
   }
-
-  // ── GET /api/export/:id/status ────────────────────────────────────────────
 
   @Get(':id/status')
   @ApiOperation({ summary: 'Poll export job status' })
@@ -142,8 +136,6 @@ export class ExportController {
     };
   }
 
-  // ── GET /api/export/:id/download ──────────────────────────────────────────
-
   @Get(':id/download')
   @ApiOperation({ summary: 'Download the completed export file' })
   async download(@Param('id') id: string, @Res() res: Response) {
@@ -157,8 +149,6 @@ export class ExportController {
     stream.pipe(res);
   }
 
-  // ── POST /api/export/direct — generate & stream immediately, no DB record ──
-
   @Post('direct')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate and stream export immediately — no file saved' })
@@ -170,6 +160,7 @@ export class ExportController {
     const filters = {
       category: dto.category,
       subCategory: dto.subCategory,
+      seller: dto.seller,
       dateFrom: dto.dateFrom ? new Date(dto.dateFrom) : undefined,
       dateTo: dto.dateTo ? new Date(dto.dateTo) : undefined,
       status: dto.status,

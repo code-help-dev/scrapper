@@ -5,7 +5,6 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
 export const api = axios.create({ baseURL: API_BASE });
 
-// Attach JWT from NextAuth session on every request
 api.interceptors.request.use(async (config) => {
   const session = await getSession();
   if (session?.accessToken) {
@@ -14,7 +13,6 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// On 401, force a session re-check; if the session error flag is set redirect to login
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -24,11 +22,19 @@ api.interceptors.response.use(
         await signOut({ redirect: true, callbackUrl: '/login' });
       }
     }
+    
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        error.response.data = JSON.parse(text);
+      } catch {
+        
+      }
+    }
     return Promise.reject(error);
   },
 );
 
-// ── Auth ──────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
@@ -37,7 +43,6 @@ export const authApi = {
   me: () => api.get('/auth/me'),
 };
 
-// ── Jobs ──────────────────────────────────────────────────────────────────
 export const jobsApi = {
   list: (params?: {
     page?: number;
@@ -61,7 +66,6 @@ export const jobsApi = {
   resume: (id: string) => api.post(`/jobs/${id}/resume`),
 };
 
-// ── Products ──────────────────────────────────────────────────────────────
 export const productsApi = {
   list: (params?: {
     page?: number;
@@ -79,16 +83,15 @@ export const productsApi = {
   images: (id: string) => api.get(`/products/${id}/images`),
   delete: (id: string) => api.delete(`/products/${id}`),
   categories: () => api.get('/products/categories'),
-  subcategories: (category: string) =>
-    api.get('/products/subcategories', { params: { category } }),
+  subcategories: (category?: string) =>
+    api.get('/products/subcategories', { params: category ? { category } : undefined }),
 };
-
-// ── Export ────────────────────────────────────────────────────────────────
 
 interface ExportPayload {
   format: string;
   category?: string;
   subCategory?: string;
+  seller?: string;
   dateFrom?: string;
   dateTo?: string;
   status?: string;

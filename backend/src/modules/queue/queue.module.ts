@@ -42,7 +42,7 @@ import {
       { name: QUEUE_IMAGE },
       { name: QUEUE_EXPORT },
     ),
-    // Modules whose services are injected into processors
+    
     DatabaseModule,
     ScraperModule,
     ExtractorModule,

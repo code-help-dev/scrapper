@@ -26,7 +26,7 @@ export default function ProductDetailPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Header */}
+      {}
       <div className="flex items-start gap-4">
         <Link href="/products">
           <Button variant="ghost" size="icon" className="mt-1"><ArrowLeft className="h-4 w-4" /></Button>
@@ -59,10 +59,10 @@ export default function ProductDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column */}
+        {}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Category — always visible, first piece of product info */}
+          {}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-1.5">
@@ -94,7 +94,7 @@ export default function ProductDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Images */}
+          {}
           {product.images.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-sm">Images</CardTitle></CardHeader>
@@ -126,7 +126,7 @@ export default function ProductDetailPage() {
             </Card>
           )}
 
-          {/* Basic Specs */}
+          {}
           {basicSpecs.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-sm">Specifications</CardTitle></CardHeader>
@@ -145,7 +145,7 @@ export default function ProductDetailPage() {
             </Card>
           )}
 
-          {/* Extended Specs */}
+          {}
           {extendedSpecs.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-sm">More Specifications</CardTitle></CardHeader>
@@ -164,7 +164,7 @@ export default function ProductDetailPage() {
             </Card>
           )}
 
-          {/* Description */}
+          {}
           {product.description && (
             <Card>
               <CardHeader><CardTitle className="text-sm">Description</CardTitle></CardHeader>
@@ -175,7 +175,7 @@ export default function ProductDetailPage() {
           )}
         </div>
 
-        {/* Right column — Seller */}
+        {}
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Seller</CardTitle></CardHeader>
@@ -198,7 +198,7 @@ export default function ProductDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Company Details */}
+          {}
           {product.seller && (
             product.seller.gstNumber || product.seller.yearsEstablished || product.seller.businessType ||
             product.seller.numberOfEmployees || product.seller.turnover || product.seller.legalStatus

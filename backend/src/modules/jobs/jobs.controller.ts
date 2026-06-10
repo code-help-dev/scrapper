@@ -14,8 +14,7 @@ import {
   MessageEvent,
 } from '@nestjs/common';
 
-// Matches the same pattern used in url-input.service.ts
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Model } from 'mongoose';
@@ -54,8 +53,6 @@ export class JobsController {
     @InjectQueue(QUEUE_EXTRACTION)
     private readonly extractionQueue: Queue,
   ) {}
-
-  // ── GET /api/jobs ─────────────────────────────────────────────────────────
 
   @Get()
   @ApiOperation({ summary: 'List extraction jobs — paginated, filterable, searchable' })
@@ -96,8 +93,6 @@ export class JobsController {
     };
   }
 
-  // ── GET /api/jobs/:id ─────────────────────────────────────────────────────
-
   @Get(':id')
   @ApiOperation({ summary: 'Get extraction job detail + current BullMQ state' })
   async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
@@ -109,13 +104,11 @@ export class JobsController {
       const bullJob = await this.extractionQueue.getJob(id);
       bullState = bullJob ? await bullJob.getState() : undefined;
     } catch {
-      // BullMQ job may already be cleaned up
+      
     }
 
     return { ...job, bullState };
   }
-
-  // ── GET /api/jobs/:id/events — SSE real-time progress ────────────────────
 
   @Sse(':id/events')
   @ApiOperation({ summary: 'SSE stream — emits job state every 2s until terminal' })
@@ -136,8 +129,6 @@ export class JobsController {
       ),
     );
   }
-
-  // ── POST /api/jobs/:id/pause ──────────────────────────────────────────────
 
   @Post(':id/pause')
   @ApiOperation({ summary: 'Pause a queued job' })
@@ -160,8 +151,6 @@ export class JobsController {
 
     return { message: 'Job paused', jobId: id };
   }
-
-  // ── POST /api/jobs/:id/resume ─────────────────────────────────────────────
 
   @Post(':id/resume')
   @ApiOperation({ summary: 'Resume a paused job' })
@@ -193,8 +182,6 @@ export class JobsController {
     return { message: 'Job resumed', jobId: id };
   }
 
-  // ── DELETE /api/jobs/:id — cancel queued or paused job ───────────────────
-
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Cancel a queued, paused, or processing job' })
@@ -220,8 +207,6 @@ export class JobsController {
       completedAt: new Date(),
     });
   }
-
-  // ── POST /api/jobs/:id/retry — retry failed job ───────────────────────────
 
   @Post(':id/retry')
   @ApiOperation({ summary: 'Retry a failed or re-scrape a completed extraction job' })

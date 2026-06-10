@@ -26,8 +26,6 @@ export class ExtractionJob {
   @Prop({ type: [Types.ObjectId], ref: 'Product', default: [] })
   productIds: Types.ObjectId[];
 
-  // Set on child product jobs spawned by a category/listing discovery job.
-  // Lets the discovery (batch) job aggregate live scrape progress.
   @Prop({ type: Types.ObjectId, ref: 'ExtractionJob', default: null })
   parentJobId: Types.ObjectId | null;
 

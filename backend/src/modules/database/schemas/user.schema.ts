@@ -26,4 +26,3 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
-// B4: removed duplicate index — @Prop({ unique: true }) already defines it

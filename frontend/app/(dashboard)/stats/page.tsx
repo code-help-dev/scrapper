@@ -48,7 +48,7 @@ export default function StatsPage() {
         <p className="text-muted-foreground text-sm">Real-time extraction stats</p>
       </div>
 
-      {/* KPI row */}
+      {}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Products" value={products.total} icon={Package} />
         <StatCard title="Completed" value={products.completed} icon={CheckCircle2} color="text-green-600" />
@@ -56,7 +56,7 @@ export default function StatsPage() {
         <StatCard title="Avg Confidence" value={`${products.avgConfidenceScore}%`} icon={AlertTriangle} />
       </div>
 
-      {/* Jobs row */}
+      {}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Jobs Queued" value={jobs.queued} icon={Briefcase} />
         <StatCard title="Processing" value={jobs.processing} icon={Briefcase} color="text-blue-600" />
@@ -70,7 +70,7 @@ export default function StatsPage() {
         />
       </div>
 
-      {/* Category breakdown chart */}
+      {}
       {categoryBreakdown.length > 0 && (
         <Card>
           <CardHeader>

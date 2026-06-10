@@ -22,7 +22,6 @@ const CAPTCHA_SIGNALS = [
   'Access denied',
 ];
 
-// B1 fix: replaced waitUntil: 'networkidle' (never reached on Aajjo) with this helper
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 @Injectable()
@@ -45,7 +44,6 @@ export class ScraperService {
     );
   }
 
-  // Force highest-resolution image URLs — swap thumbnails for full-res
   async unlockHighResImages(page: Page): Promise<void> {
     await page.evaluate(() => {
       document.querySelectorAll('img[data-src]').forEach((img) => {
@@ -69,22 +67,19 @@ export class ScraperService {
     });
   }
 
-  // Shared page setup — B1 fix: domcontentloaded + short settle instead of networkidle
   private async prepPage(page: Page, url: string, timeout: number): Promise<void> {
     await page.goto(url, {
-      waitUntil: 'domcontentloaded', // B1: was 'networkidle', timed out on Aajjo
+      waitUntil: 'domcontentloaded', 
       timeout,
     });
-    // Wait for main content to render (Aajjo uses React-like rendering)
+    
     await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 })
-      .catch(() => {}); // non-fatal — continue even if not complete
+      .catch(() => {}); 
     await this.unlockHighResImages(page);
-    // Scroll to trigger lazy-load.
-    // Cap at MAX_TICKS to prevent an infinite loop when lazy-loaded sections
-    // (e.g. Aajjo similar-products sidebar) keep expanding scrollHeight.
+    
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => {
-        const MAX_TICKS = 60; // 60 × 80 ms = 4.8 s ceiling
+        const MAX_TICKS = 60; 
         let ticks = 0;
         const timer = setInterval(() => {
           window.scrollBy(0, 300);
@@ -96,7 +91,7 @@ export class ScraperService {
         }, 80);
       });
     });
-    await sleep(800); // reduced from 1500 ms — content is already in DOM after domcontentloaded
+    await sleep(800); 
   }
 
   async loadPage(url: string, retries = 3): Promise<ScrapedPage> {
@@ -112,7 +107,7 @@ export class ScraperService {
         session = await this.browserPool.acquire();
         const page = await session.context.newPage();
 
-        await this.prepPage(page, url, timeout); // B1+B6 fix applied here
+        await this.prepPage(page, url, timeout); 
 
         const html = await page.content();
         const title = await page.title();
@@ -142,10 +137,6 @@ export class ScraperService {
     throw lastError ?? new Error(`Failed to load ${url} after ${retries} attempts`);
   }
 
-  /**
-   * withPage — acquires a browser, preps the page, passes it to fn, cleans up.
-   * Processors use this so they never touch the browser pool directly.
-   */
   async withPage<T>(url: string, fn: (page: Page) => Promise<T>, retries = 3): Promise<T> {
     const timeout = this.config.get<number>('scraping.timeout') ?? 30000;
     const delayMin = this.config.get<number>('scraping.requestDelayMin') ?? 2000;
@@ -161,7 +152,7 @@ export class ScraperService {
         session = await this.browserPool.acquire();
         page = await session.context.newPage();
 
-        await this.prepPage(page, url, timeout); // B1+B6 fix applied here
+        await this.prepPage(page, url, timeout); 
 
         const html = await page.content();
         const title = await page.title();
@@ -188,16 +179,6 @@ export class ScraperService {
     throw lastError ?? new Error(`Failed to load ${url} after ${retries} attempts`);
   }
 
-  /**
-   * Discover individual product URLs from a category / listing page.
-   *
-   * Aajjo listing pages render ~125 products up front and load the rest via a
-   * "Load More" button (<a id="loadMoreBtn" href="javascript:void(0)">) that
-   * fires an AJAX append. Scrolling does NOT load more. So we click the button
-   * repeatedly until it disappears or stops producing new products.
-   *
-   * @param maxProducts hard cap on URLs to return (0 / undefined = no cap).
-   */
   async discoverProductUrls(listingUrl: string, maxProducts = 0): Promise<string[]> {
     const timeout = this.config.get<number>('scraping.timeout') ?? 30000;
     const cap = maxProducts > 0 ? maxProducts : Infinity;
@@ -205,14 +186,6 @@ export class ScraperService {
     const page = await session.context.newPage();
     const urls = new Set<string>();
 
-    // Collect product URLs currently in the DOM (strip #fragment / ?query so
-    // the same product linked twice — image + title — dedupes cleanly).
-    //
-    // Aajjo has two URL structures for product links:
-    //   1. /product/{slug}  — used on some pages
-    //   2. /{category}/{sub-category}/{product-slug}  — used on sub-category listing pages
-    // We detect case (2) by grabbing all <a> tags whose href shares the listing
-    // URL as a prefix and has at least one additional path segment.
     const collect = async () => {
       const found: string[] = await page.evaluate((listing) => {
         const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
@@ -220,7 +193,7 @@ export class ScraperService {
           .map((a) => a.href)
           .filter((h) => {
             if (!/aajjo\.com/i.test(h)) return false;
-            if (/aajjo\.com\/product\//i.test(h)) return true;
+            if (/aajjo\.com\/product\
             try {
               const base = new URL(listing);
               const candidate = new URL(h);
@@ -243,7 +216,7 @@ export class ScraperService {
         return anchors.filter((a) => {
           const h = a.href;
           if (!/aajjo\.com/i.test(h)) return false;
-          if (/aajjo\.com\/product\//i.test(h)) return true;
+          if (/aajjo\.com\/product\
           try {
             const base = new URL(listing);
             const candidate = new URL(h);
@@ -264,8 +237,8 @@ export class ScraperService {
       await sleep(2500);
       await collect();
 
-      const MAX_CLICKS = 300; // safety ceiling (~125 products/click ⇒ huge catalogs)
-      const MAX_STALE = 5;    // tolerate slow AJAX appends before declaring "done"
+      const MAX_CLICKS = 300; 
+      const MAX_STALE = 5;    
       let staleRounds = 0;
 
       for (let i = 0; i < MAX_CLICKS && urls.size < cap && staleRounds < MAX_STALE; i++) {
@@ -274,12 +247,11 @@ export class ScraperService {
 
         const btn = await page.$('#loadMoreBtn');
         const visible = btn ? await btn.isVisible().catch(() => false) : false;
-        if (!btn || !visible) break; // button gone ⇒ genuinely the end
+        if (!btn || !visible) break; 
 
         await btn.scrollIntoViewIfNeeded().catch(() => {});
         await btn.click({ timeout: 5000 }).catch(() => {});
 
-        // Wait for the AJAX append to add more product anchors
         await page
           .waitForFunction(
             (prev) => document.querySelectorAll('a[href*="/product/"]').length > prev,
@@ -291,8 +263,7 @@ export class ScraperService {
         await collect();
 
         if (urls.size <= before) {
-          // No growth this round — the append may just be slow. Give it extra
-          // settle time before counting it against the stale budget.
+          
           staleRounds++;
           await sleep(2000);
         } else {

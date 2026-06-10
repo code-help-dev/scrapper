@@ -1,11 +1,3 @@
-/**
- * Standalone extraction test — run with:
- *   cd backend
- *   npx ts-node -r tsconfig-paths/register scripts/test-extract.ts
- *
- * Navigates to a real Aajjo product URL, dumps raw DOM structure, then
- * runs every extractor and prints exactly what gets saved to the database.
- */
 
 import { chromium } from 'playwright';
 
@@ -21,18 +13,15 @@ async function main() {
   console.log('  URL:', TARGET_URL);
   console.log('═══════════════════════════════════════════════════════\n');
 
-  // ── Load page ──────────────────────────────────────────────────────────────
   await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.readyState === 'complete', { timeout: 15000 }).catch(() => {});
   await new Promise<void>((r) => setTimeout(r, 2000));
 
-  // ── 1. Raw DOM audit ───────────────────────────────────────────────────────
   console.log('━━━ RAW DOM STRUCTURE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   const domAudit = await page.evaluate(() => {
     const out: Record<string, string> = {};
 
-    // Breadcrumb container
     const breadcrumbSelectors = [
       'ol.breadcrumb', 'ul.breadcrumb',
       'nav[aria-label*="breadcrumb" i]',
@@ -48,7 +37,6 @@ async function main() {
       }
     }
 
-    // Fallback: find any small div/nav/p with » that has category links
     if (!out['breadcrumb_html']) {
       const els = Array.from(document.querySelectorAll('nav, div, p')) as HTMLElement[];
       for (const el of els) {
@@ -63,7 +51,6 @@ async function main() {
       }
     }
 
-    // All a[href] links that look like category paths — what does isCategoryHref see?
     const categoryLinks = (Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[])
       .filter((a) => {
         try {
@@ -78,34 +65,28 @@ async function main() {
       .map((a) => `[${a.textContent?.trim()}] → ${a.href}`);
     out['category_links_found'] = categoryLinks.join('\n') || '(none)';
 
-    // JSON-LD scripts
     const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
       .map((s) => s.textContent?.slice(0, 300))
       .join('\n---\n');
     out['json_ld'] = jsonLd || '(none)';
 
-    // Tab navigation
     const tabLinks = Array.from(document.querySelectorAll('a[href^="#"]'))
       .map((a) => `href="${a.getAttribute('href')}" text="${a.textContent?.trim()}" outer="${a.outerHTML.slice(0, 150)}"`)
       .join('\n');
     out['tab_links'] = tabLinks || '(none)';
 
-    // #Specification element
     const specEl = document.getElementById('Specification');
     out['spec_element_tag'] = specEl ? specEl.tagName + ' class="' + specEl.className + '" id="' + specEl.id + '"' : '(NOT FOUND)';
     out['spec_element_html'] = specEl ? specEl.outerHTML.slice(0, 800) : '(NOT FOUND)';
 
-    // #Description element
     const descEl = document.getElementById('Description');
     out['desc_element_tag'] = descEl ? descEl.tagName + ' class="' + descEl.className + '"' : '(NOT FOUND)';
     out['desc_element_html'] = descEl ? descEl.outerHTML.slice(0, 600) : '(NOT FOUND)';
 
-    // #CompanyDetails element
     const companyEl = document.getElementById('CompanyDetails');
     out['company_element_tag'] = companyEl ? companyEl.tagName + ' class="' + companyEl.className + '"' : '(NOT FOUND)';
     out['company_element_html'] = companyEl ? companyEl.outerHTML.slice(0, 800) : '(NOT FOUND)';
 
-    // Basic spec table
     const basicTable =
       document.querySelector('.product-details table.service-chart-datails') ??
       document.querySelector('.product-details table.service-chart-details') ??
@@ -121,7 +102,6 @@ async function main() {
     console.log(val);
   }
 
-  // ── 2. Click tabs then re-audit ────────────────────────────────────────────
   console.log('\n\n━━━ AFTER CLICKING TABS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -136,10 +116,8 @@ async function main() {
     }
   }
 
-  // ── 3. Run the actual extractors ───────────────────────────────────────────
   console.log('\n\n━━━ EXTRACTION RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-  // --- Breadcrumb ---
   const breadcrumb = await page.evaluate(() => {
     const clean = (el: Element | null | undefined): string =>
       el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
@@ -154,7 +132,6 @@ async function main() {
       } catch { return false; }
     };
 
-    // Strategy 0: JSON-LD
     const decodeHtml = (str: string): string => {
       if (!str.includes('&')) return str;
       const ta = document.createElement('textarea');
@@ -176,7 +153,6 @@ async function main() {
       } catch { }
     }
 
-    // Strategy 1: ol.breadcrumb / ul.breadcrumb
     const listBreadcrumb = document.querySelector(
       'ol.breadcrumb, ul.breadcrumb, nav[aria-label*="breadcrumb" i], [role="navigation"][class*="breadcrumb"]',
     );
@@ -187,7 +163,6 @@ async function main() {
       if (links.length >= 1) return { strategy: 'ol/ul.breadcrumb', category: clean(links[0]), subCategory: links[1] ? clean(links[1]) : '' };
     }
 
-    // Strategy 2: class/id containing breadcrumb
     for (const el of Array.from(document.querySelectorAll('[class*="breadcrumb"], [id*="breadcrumb"]'))) {
       const links = Array.from(el.querySelectorAll('a')).filter(
         (a) => a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim(),
@@ -195,7 +170,6 @@ async function main() {
       if (links.length >= 1) return { strategy: 'class/id contains breadcrumb', category: clean(links[0]), subCategory: links[1] ? clean(links[1]) : '' };
     }
 
-    // Strategy 3: container with » and category links
     for (const el of Array.from(document.querySelectorAll('nav, div, p, span')) as HTMLElement[]) {
       const text = el.textContent ?? '';
       if (!text.includes('»') && !text.includes('›')) continue;
@@ -211,7 +185,6 @@ async function main() {
       }
     }
 
-    // Strategy 4: any category link in top 60%
     const pageHeight = document.body.scrollHeight || 2000;
     const allLinks = (Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[])
       .filter((a) => {
@@ -228,7 +201,6 @@ async function main() {
 
   console.log('BREADCRUMB →', JSON.stringify(breadcrumb, null, 2));
 
-  // --- Specs ---
   const specs = await page.evaluate(() => {
     const out: { key: string; val: string; section: string }[] = [];
     const readTable = (table: Element | null | undefined, section: string) => {
@@ -282,7 +254,6 @@ async function main() {
   console.log(`\nSPECS (${specs.length} rows) →`);
   specs.forEach((s) => console.log(`  [${s.section}] ${s.key}: ${s.val}`));
 
-  // --- Description ---
   const description = await page.evaluate(() => {
     for (const id of ['Description', 'ProductDescription', 'product-description']) {
       const el = document.getElementById(id);
@@ -303,7 +274,6 @@ async function main() {
   });
   console.log('\nDESCRIPTION →', JSON.stringify(description, null, 2));
 
-  // --- All store/subdomain links with DOM position relative to #CompanyDetails ---
   const allSellerLinks = await page.evaluate(() => {
     const companyH = document.getElementById('CompanyDetails');
     return (Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[])
@@ -321,7 +291,6 @@ async function main() {
   console.log(`\nALL STORE/SUBDOMAIN LINKS (${allSellerLinks.length}) relative to #CompanyDetails →`);
   allSellerLinks.forEach((l) => console.log(' ', l));
 
-  // --- Seller (JSON-LD + DOM) ---
   const seller = await page.evaluate(() => {
     let jldSellerName = '', jldProfileUrl = '', jldAddress = '', jldCity = '', jldState = '', jldPhone = '', jldLogo = '';
     for (const script of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
@@ -369,7 +338,6 @@ async function main() {
   });
   console.log('\nSELLER →', JSON.stringify(seller, null, 2));
 
-  // --- Images ---
   const images = await page.evaluate(() => {
     return (Array.from(document.querySelectorAll('img[src]')) as HTMLImageElement[])
       .map((img) => img.src)

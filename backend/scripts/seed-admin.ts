@@ -1,11 +1,4 @@
-/**
- * One-shot admin user seeder.
- * Run:  npm run seed:admin
- * Or:   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=Secret123 npm run seed:admin
- *
- * The first registered user is automatically set to ADMIN role.
- * If users already exist this script prints existing admin email and exits.
- */
+
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
@@ -13,7 +6,7 @@ import { UsersService } from '../src/modules/users/users.service';
 import { UserRole } from '../src/common/enums/user-role.enum';
 
 async function main() {
-  // Silence NestJS bootstrap logs
+  
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
   });

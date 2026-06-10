@@ -7,8 +7,6 @@ import axios from 'axios';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 
-// image-hash does not expose a proper typed async API — use require + manual promise wrapper
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const imageHashLib = require('image-hash');
 const imageHashAsync = (input: unknown, bits: number, precise: boolean): Promise<string> =>
   new Promise((resolve, reject) =>
@@ -20,7 +18,7 @@ const imageHashAsync = (input: unknown, bits: number, precise: boolean): Promise
 
 export interface ProcessedImage {
   originalUrl: string;
-  storageUrl: string;         // Cloudinary delivery URL
+  storageUrl: string;         
   cloudinaryPublicId: string;
   thumbnailUrl: string;
   isFeatured: boolean;
@@ -56,8 +54,6 @@ export class ImageService {
     this.folder = folder;
   }
 
-  // ── Download raw image bytes ──────────────────────────────────────────────
-
   private async downloadImage(url: string): Promise<Buffer> {
     const response = await axios.get<Buffer>(url, {
       responseType: 'arraybuffer',
@@ -71,11 +67,9 @@ export class ImageService {
     return Buffer.from(response.data);
   }
 
-  // ── Compute perceptual hash ───────────────────────────────────────────────
-
   private async computePHash(buffer: Buffer): Promise<string> {
     try {
-      // image-hash expects a file path or URL; use in-memory via temp approach
+      
       const hash = await imageHashAsync(
         { data: buffer, ext: 'webp' },
         16,
@@ -87,8 +81,6 @@ export class ImageService {
     }
   }
 
-  // ── Check if pHash duplicate exists in any product ───────────────────────
-
   private async isDuplicate(pHash: string): Promise<boolean> {
     if (!pHash) return false;
     const exists = await this.productModel
@@ -96,8 +88,6 @@ export class ImageService {
       .exec();
     return !!exists;
   }
-
-  // ── Upload buffer to Cloudinary + return result ───────────────────────────
 
   private uploadToCloudinary(
     buffer: Buffer,
@@ -110,10 +100,10 @@ export class ImageService {
           public_id: publicId,
           resource_type: 'image',
           overwrite: false,
-          // Cloudinary will deliver WebP automatically to supporting browsers
+          
           format: 'webp',
           quality: 'auto:best',
-          // Preserve original resolution — do NOT downscale
+          
           transformation: [{ flags: 'preserve_transparency' }],
         },
         (error, result) => {
@@ -125,8 +115,6 @@ export class ImageService {
     });
   }
 
-  // ── Generate thumbnail URL from Cloudinary public ID ─────────────────────
-
   private buildThumbnailUrl(publicId: string): string {
     return cloudinary.url(publicId, {
       width: THUMBNAIL_WIDTH,
@@ -136,8 +124,6 @@ export class ImageService {
     });
   }
 
-  // ── Main: process a single image URL ─────────────────────────────────────
-
   async processImage(
     originalUrl: string,
     isFeatured: boolean,
@@ -146,7 +132,6 @@ export class ImageService {
     try {
       const rawBuffer = await this.downloadImage(originalUrl);
 
-      // ── Sharp: validate dimensions + optimize to WebP ──────────────────
       const sharpInstance = sharp(rawBuffer);
       const metadata = await sharpInstance.metadata();
 
@@ -160,19 +145,16 @@ export class ImageService {
         return null;
       }
 
-      // Convert to WebP at maximum quality (preserving original resolution)
       const webpBuffer = await sharpInstance
         .webp({ quality: 95, effort: 4 })
         .toBuffer();
 
-      // ── pHash deduplication ────────────────────────────────────────────
       const pHash = await this.computePHash(webpBuffer);
       if (await this.isDuplicate(pHash)) {
         this.logger.debug(`Duplicate pHash detected — skipping: ${originalUrl}`);
         return null;
       }
 
-      // ── Upload to Cloudinary ───────────────────────────────────────────
       const publicId = `${productId}_${Date.now()}`;
       const uploaded = await this.uploadToCloudinary(webpBuffer, publicId);
 
@@ -196,8 +178,6 @@ export class ImageService {
     }
   }
 
-  // ── Process all images for a product ─────────────────────────────────────
-
   async processProductImages(
     rawImages: { originalUrl: string; isFeatured: boolean }[],
     productId: string,
@@ -209,7 +189,6 @@ export class ImageService {
       if (processed) results.push(processed);
     }
 
-    // Ensure at least one image is marked as featured
     if (results.length > 0 && !results.some((i) => i.isFeatured)) {
       results[0].isFeatured = true;
     }
@@ -217,8 +196,6 @@ export class ImageService {
     this.logger.log(`Processed ${results.length}/${rawImages.length} images for product ${productId}`);
     return results;
   }
-
-  // ── Delete image from Cloudinary ──────────────────────────────────────────
 
   async deleteImage(cloudinaryPublicId: string): Promise<void> {
     try {

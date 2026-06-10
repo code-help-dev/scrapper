@@ -66,7 +66,7 @@ export default function SubmitPage() {
         <p className="text-muted-foreground text-sm">Queue Aajjo supplier or product pages for scraping</p>
       </div>
 
-      {/* Single URL */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -105,7 +105,7 @@ export default function SubmitPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk CSV */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

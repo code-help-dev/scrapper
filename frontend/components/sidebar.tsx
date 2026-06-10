@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   Link2, ListChecks, Package, Download, BarChart2,
-  LogOut, Activity, ShoppingBag, Users, Search,
+  LogOut, Activity, Users,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,9 +25,7 @@ export function Sidebar() {
   const { data: session } = useSession();
 
   const [collapsed, setCollapsed] = useState(false);
-  const [sellerOpen, setSellerOpen] = useState(pathname.startsWith('/sellers'));
 
-  // Persist collapsed state across page loads
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
     if (saved !== null) setCollapsed(saved === 'true');
@@ -51,7 +49,7 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-60',
       )}
     >
-      {/* Brand + collapse toggle */}
+      {}
       <div className={cn('border-b flex items-center shrink-0', collapsed ? 'p-3 justify-center' : 'p-4 gap-2')}>
         {!collapsed && (
           <div className="flex-1 min-w-0">
@@ -79,7 +77,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Nav */}
+      {}
       <nav className={cn('flex-1 overflow-y-auto space-y-0.5', collapsed ? 'p-2' : 'p-3')}>
         {NAV_MAIN.map(({ href, icon: Icon, label }) => (
           <Link
@@ -99,74 +97,27 @@ export function Sidebar() {
           </Link>
         ))}
 
-        {/* Divider */}
+        {}
         <div className="my-2 border-t" />
 
-        {/* Seller Orders (collapsible sub-menu) */}
-        {collapsed ? (
-          <Link
-            href="/sellers"
-            title="Sellers"
-            className={cn(
-              'flex items-center justify-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
-              pathname.startsWith('/sellers')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-            )}
-          >
-            <ShoppingBag className="h-4 w-4 shrink-0" />
-          </Link>
-        ) : (
-          <>
-            <button
-              onClick={() => setSellerOpen((o) => !o)}
-              className={cn(
-                'w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                pathname.startsWith('/sellers')
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              )}
-            >
-              <ShoppingBag className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Seller Orders</span>
-              <span className="text-xs opacity-50">{sellerOpen ? '▲' : '▼'}</span>
-            </button>
-
-            {sellerOpen && (
-              <div className="ml-4 space-y-0.5">
-                <Link
-                  href="/sellers/search"
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors',
-                    pathname === '/sellers/search'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                  )}
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  Search
-                </Link>
-              </div>
-            )}
-
-            {/* List of Sellers */}
-            <Link
-              href="/sellers"
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                pathname === '/sellers'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              )}
-            >
-              <Users className="h-4 w-4" />
-              List of Sellers
-            </Link>
-          </>
-        )}
+        {}
+        <Link
+          href="/sellers"
+          title={collapsed ? 'List of Sellers' : undefined}
+          className={cn(
+            'flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
+            collapsed ? 'justify-center' : 'gap-3 px-3',
+            pathname.startsWith('/sellers')
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          )}
+        >
+          <Users className="h-4 w-4 shrink-0" />
+          {!collapsed && 'List of Sellers'}
+        </Link>
       </nav>
 
-      {/* User */}
+      {}
       <div className={cn('border-t shrink-0', collapsed ? 'p-2' : 'p-3')}>
         {!collapsed && (
           <div className="flex items-center gap-2 px-3 py-2 mb-1">

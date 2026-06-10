@@ -54,7 +54,6 @@ export class AuthService {
   async register(dto: RegisterDto, requestingUserRole?: UserRole) {
     const totalUsers = await this.usersService.countAll();
 
-    // First user can register freely; after that admin-only
     if (totalUsers > 0 && requestingUserRole !== UserRole.ADMIN) {
       throw new ForbiddenException('Only admins can register new users');
     }

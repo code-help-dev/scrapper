@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
-// @ts-ignore — playwright-extra + stealth have no official TS types
+
 import { chromium as chromiumExtra } from 'playwright-extra';
-// @ts-ignore
+
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 chromiumExtra.use(StealthPlugin());
@@ -40,7 +40,7 @@ export class BrowserPoolService implements OnModuleDestroy {
 
   async acquire(): Promise<BrowserSession> {
     if (this.sessions.size >= this.maxConcurrent) {
-      // Wait for a slot to free up — poll every 500 ms
+      
       await new Promise<void>((resolve) => {
         const interval = setInterval(() => {
           if (this.sessions.size < this.maxConcurrent) {
@@ -82,7 +82,6 @@ export class BrowserPoolService implements OnModuleDestroy {
 
     const context = await browser.newContext(contextOptions);
 
-    // Block unnecessary resource types to speed up scraping
     await context.route('**/*.{gif,svg,woff,woff2,ttf,eot,ico}', (route) =>
       route.abort(),
     );
@@ -101,7 +100,7 @@ export class BrowserPoolService implements OnModuleDestroy {
       await session.context.close();
       await session.browser.close();
     } catch {
-      // ignore cleanup errors
+      
     }
     this.sessions.delete(sessionId);
     this.logger.debug(`Browser session released [${sessionId}] — pool: ${this.sessions.size}/${this.maxConcurrent}`);

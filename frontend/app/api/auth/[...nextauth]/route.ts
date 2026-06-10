@@ -4,7 +4,6 @@ import axios from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
-// 7-day access token lifetime minus 5-minute buffer before triggering refresh
 const ACCESS_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000 - 5 * 60 * 1000;
 
 async function refreshAccessToken(token: any) {
@@ -55,7 +54,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // Initial sign-in: store tokens and expiry
+        
         token.id = user.id;
         token.role = (user as any).role;
         token.accessToken = (user as any).accessToken;
@@ -64,12 +63,10 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      // Token still valid — return as-is
       if (Date.now() < (token.accessTokenExpires as number)) {
         return token;
       }
 
-      // Access token expired — silently refresh using the refresh token
       return refreshAccessToken(token);
     },
     async session({ session, token }) {

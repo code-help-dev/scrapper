@@ -24,7 +24,7 @@ function SellerCard({ seller }: { seller: Seller }) {
       href={`/sellers/${encodeURIComponent(seller.sellerName)}`}
       className="group flex flex-col gap-3 rounded-xl border bg-card p-4 transition hover:shadow-md hover:border-primary/40"
     >
-      {/* Logo / Avatar */}
+      {}
       <div className="flex items-start justify-between gap-2">
         <div className="h-12 w-12 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
           {seller.sellerLogoUrl ? (
@@ -46,7 +46,7 @@ function SellerCard({ seller }: { seller: Seller }) {
         </Badge>
       </div>
 
-      {/* Name */}
+      {}
       <div>
         <h3 className="font-semibold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2">
           {seller.sellerName}
@@ -59,7 +59,7 @@ function SellerCard({ seller }: { seller: Seller }) {
         )}
       </div>
 
-      {/* Location */}
+      {}
       {(seller.state || seller.country) && (
         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
           <MapPin className="h-3 w-3 shrink-0" />
@@ -95,7 +95,7 @@ export default function SellersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function SellersPage() {
         </div>
       </div>
 
-      {/* Loading skeleton */}
+      {}
       {isLoading && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 12 }).map((_, i) => (
@@ -126,7 +126,7 @@ export default function SellersPage() {
         </div>
       )}
 
-      {/* Empty state */}
+      {}
       {!isLoading && sellers.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-24 text-center">
           <Users className="h-12 w-12 text-muted-foreground/40" />
@@ -136,7 +136,7 @@ export default function SellersPage() {
         </div>
       )}
 
-      {/* Grid */}
+      {}
       {!isLoading && sellers.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {sellers.map((s) => (
@@ -145,7 +145,7 @@ export default function SellersPage() {
         </div>
       )}
 
-      {/* Pagination */}
+      {}
       {totalPages > 1 && (
         <SmartPagination
           currentPage={page}

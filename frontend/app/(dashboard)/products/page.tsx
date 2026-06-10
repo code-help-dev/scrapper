@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 function ProductCard({ p }: { p: Product }) {
   const featured = p.images?.find((i) => i.isFeatured) ?? p.images?.[0];
-  // Prefer non-empty URLs — empty strings from pre-processed images crash next/image
+  
   const imgSrc =
     (featured?.thumbnailUrl?.trim() || featured?.storageUrl?.trim() || featured?.originalUrl?.trim()) || null;
 
@@ -98,14 +98,12 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Fetch all categories for the sidebar
   const { data: categories = [] } = useQuery<CategoryInfo[]>({
     queryKey: ['product-categories'],
     queryFn: () => productsApi.categories().then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch subcategories for the selected category
   const { data: subcategories = [] } = useQuery<SubcategoryInfo[]>({
     queryKey: ['product-subcategories', selectedCategory],
     queryFn: () =>
@@ -116,7 +114,6 @@ export default function ProductsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch products with current filters
   const { data, isLoading } = useQuery<PaginatedResponse<Product>>({
     queryKey: ['products', page, limit, selectedCategory, selectedSubcategory, sortBy, sortOrder],
     queryFn: () =>
@@ -160,7 +157,7 @@ export default function ProductsPage() {
 
   return (
     <div className="flex h-full min-h-0 gap-0 -m-6">
-      {/* ── Category Sidebar ─────────────────────────────────────────────── */}
+      {}
       <aside className="w-52 shrink-0 border-r bg-background overflow-y-auto">
         <div className="sticky top-0 bg-background border-b px-4 py-3">
           <div className="flex items-center gap-2">
@@ -204,10 +201,10 @@ export default function ProductsPage() {
         </nav>
       </aside>
 
-      {/* ── Main Content ─────────────────────────────────────────────────── */}
+      {}
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
         <div className="p-6 space-y-4">
-          {/* Header */}
+          {}
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-xl font-bold">
@@ -250,7 +247,7 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Subcategory Tabs */}
+          {}
           {selectedCategory && subcategories.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               <button
@@ -284,7 +281,7 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {/* Loading skeleton */}
+          {}
           {isLoading && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {Array.from({ length: limit }).map((_, i) => (
@@ -293,7 +290,7 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {/* Empty state */}
+          {}
           {!isLoading && data?.data.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-20 text-center">
               <Package className="h-10 w-10 text-muted-foreground/40" />
@@ -305,7 +302,7 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {/* Product grid */}
+          {}
           {!isLoading && data && data.data.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {data.data.map((p) => (
@@ -314,7 +311,7 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {/* Pagination */}
+          {}
           {data && totalPages > 1 && (
             <SmartPagination
               currentPage={page}

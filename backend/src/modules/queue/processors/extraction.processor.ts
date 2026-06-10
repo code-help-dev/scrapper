@@ -27,8 +27,8 @@ export interface ScrapeUrlPayload {
   jobId: string;
   sourceUrl: string;
   userId: string;
-  isDiscovery?: boolean; // B2: true when URL is a category/listing page
-  parentJobId?: string;  // set on child jobs spawned by a discovery job
+  isDiscovery?: boolean; 
+  parentJobId?: string;  
 }
 
 export interface ProcessImagePayload {
@@ -36,10 +36,6 @@ export interface ProcessImagePayload {
   images: { originalUrl: string; isFeatured: boolean }[];
 }
 
-// lockDuration must exceed the worst-case single-product scrape time.
-// prepPage (≤5s) + tabs (≤1s) + extraction (≤5s) + delay (≤5s) ≈ 16s.
-// Add generous headroom → 120s. Default BullMQ lockDuration is 30s which
-// causes stall-retries on slower pages.
 @Processor(QUEUE_EXTRACTION, { lockDuration: 120000 })
 export class ExtractionProcessor extends WorkerHost {
   private readonly logger = new Logger(ExtractionProcessor.name);
@@ -74,10 +70,10 @@ export class ExtractionProcessor extends WorkerHost {
 
     try {
       if (isDiscovery) {
-        // B2: Category page — discover individual product URLs and queue them
+        
         await this.processDiscovery(jobId, sourceUrl, userId);
       } else {
-        // Direct product page — extract and save
+        
         await this.processProduct(jobId, sourceUrl);
         await this.bumpParent(parentJobId, 'processedCount');
       }
@@ -92,10 +88,6 @@ export class ExtractionProcessor extends WorkerHost {
       throw error;
     }
   }
-
-  // ── Progress aggregation ──────────────────────────────────────────────────
-  // Each child product job atomically bumps its parent discovery job's counters.
-  // When every child has finished (scraped + failed >= total) the batch is done.
 
   private async bumpParent(
     parentJobId: string | undefined,
@@ -120,8 +112,6 @@ export class ExtractionProcessor extends WorkerHost {
     }
   }
 
-  // ── Discovery: crawl listing page → queue individual product jobs ─────────
-
   private async processDiscovery(jobId: string, listingUrl: string, userId: string): Promise<void> {
     this.logger.log(`[${jobId}] Discovery: scanning ${listingUrl}`);
 
@@ -130,7 +120,7 @@ export class ExtractionProcessor extends WorkerHost {
 
     let queued = 0;
     for (const url of productUrls) {
-      // Skip already-scraped URLs
+      
       const exists = await this.productModel.exists({ sourceUrl: url });
       if (exists) continue;
 
@@ -151,9 +141,6 @@ export class ExtractionProcessor extends WorkerHost {
       queued++;
     }
 
-    // The batch job stays PROCESSING and tracks live progress as children
-    // finish (totalProducts = how many we queued, processedCount climbs to it).
-    // bumpParent() flips it to COMPLETED when the last child lands.
     if (queued === 0) {
       const reason = productUrls.length === 0
         ? 'No product URLs found on listing page'
@@ -177,8 +164,6 @@ export class ExtractionProcessor extends WorkerHost {
 
     this.logger.log(`[${jobId}] Discovery done — ${queued} product jobs queued`);
   }
-
-  // ── Product extraction: scrape → normalize → save → queue images ──────────
 
   private async processProduct(jobId: string, sourceUrl: string): Promise<void> {
     this.logger.log(`[${jobId}] Extracting ${sourceUrl}`);
@@ -231,10 +216,8 @@ export class ExtractionProcessor extends WorkerHost {
       `[${jobId}] Saved "${normalized.productName}" — confidence: ${normalized.confidenceScore}%`,
     );
 
-    // Upsert Seller document so the seller appears in the sellers list immediately
     await this.sellersService.upsertFromProduct(normalized.seller);
 
-    // Upsert Category document and back-link categoryId on the product
     if (normalized.category) {
       try {
         const slug = normalized.category
@@ -242,7 +225,6 @@ export class ExtractionProcessor extends WorkerHost {
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
 
-        // Step 1: upsert the category and increment productCount
         const cat = await this.categoryModel.findOneAndUpdate(
           { slug },
           {
@@ -252,9 +234,6 @@ export class ExtractionProcessor extends WorkerHost {
           { upsert: true, new: true },
         );
 
-        // Step 2: push subcategory only if that slug isn't already in the array.
-        // $addToSet is insufficient here because it compares full object equality
-        // (including any legacy _id fields on subdocs), so duplicates can slip through.
         if (normalized.subCategory) {
           const normalizedSubName = normalized.subCategory.trim();
           const subSlug = normalizedSubName

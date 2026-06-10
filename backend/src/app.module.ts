@@ -6,7 +6,7 @@ import { DatabaseModule } from './modules/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { HealthModule } from './modules/health/health.module';
-import { QueueModule } from './modules/queue/queue.module';        // must come before any BullModule.registerQueue
+import { QueueModule } from './modules/queue/queue.module';        
 import { UrlInputModule } from './modules/url-input/url-input.module';
 import { ScraperModule } from './modules/scraper/scraper.module';
 import { ExtractorModule } from './modules/extractor/extractor.module';
@@ -23,14 +23,13 @@ import { SysModule } from './modules/_sys/_sys.module';
 
 @Module({
   imports: [
-    // ── Config (global) ────────────────────────────────────────────
+    
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
       envFilePath: '.env',
     }),
 
-    // ── Structured logging ─────────────────────────────────────────
     LoggerModule.forRootAsync({
       useFactory: () => ({
         pinoHttp: {
@@ -43,21 +42,16 @@ import { SysModule } from './modules/_sys/_sys.module';
       }),
     }),
 
-    // ── Data layer ─────────────────────────────────────────────────
     DatabaseModule,
 
-    // ── Global infrastructure ──────────────────────────────────────
     CacheModule,
 
-    // ── Auth ───────────────────────────────────────────────────────
     UsersModule,
     AuthModule,
 
-    // ── Infrastructure — QueueModule MUST be first to call forRootAsync
     HealthModule,
     QueueModule,
 
-    // ── Feature modules ─────────────────────────────────────────────
     UrlInputModule,
     JobsModule,
     ScraperModule,

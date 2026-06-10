@@ -22,7 +22,7 @@ import { Product, ProductDocument } from '../database/schemas/product.schema';
 import { Category, CategoryDocument } from '../database/schemas/category.schema';
 import { CacheService } from '../cache/cache.service';
 
-const CATEGORIES_TTL = 300; // 5 minutes
+const CATEGORIES_TTL = 300; 
 const SUBCATEGORIES_TTL = 300;
 const PRODUCTS_LIST_TTL = 30;
 
@@ -39,9 +39,6 @@ export class ProductsController {
     private readonly cacheService: CacheService,
   ) {}
 
-  // ── GET /api/products/categories ─────────────────────────────────────────
-  // IMPORTANT: must be declared before :id routes
-
   @Get('categories')
   @ApiOperation({ summary: 'Get unique main categories with product counts' })
   async getCategories() {
@@ -49,7 +46,6 @@ export class ProductsController {
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    // Primary: Category collection (populated by extraction pipeline)
     const fromCollection = await this.categoryModel
       .find()
       .select('name productCount')
@@ -63,7 +59,6 @@ export class ProductsController {
       return result;
     }
 
-    // Fallback: aggregate from Product collection (pre-Category-schema data)
     const result = await this.productModel
       .aggregate([
         { $match: { category: { $exists: true, $ne: '' } } },
@@ -77,28 +72,22 @@ export class ProductsController {
     return result;
   }
 
-  // ── GET /api/products/subcategories?category=X ───────────────────────────
-
   @Get('subcategories')
-  @ApiOperation({ summary: 'Get subcategories for a given main category' })
-  @ApiQuery({ name: 'category', required: true })
-  async getSubcategories(@Query('category') category: string) {
-    if (!category) return [];
-
-    const cacheKey = `products:subcategories:${category.toLowerCase().replace(/\s+/g, '_')}`;
+  @ApiOperation({ summary: 'Get subcategories, optionally filtered by main category' })
+  @ApiQuery({ name: 'category', required: false })
+  async getSubcategories(@Query('category') category?: string) {
+    const cacheKey = category
+      ? `products:subcategories:${category.toLowerCase().replace(/\s+/g, '_')}`
+      : 'products:subcategories:__all__';
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    // Always derive from Product collection — the Category.subCategories array can contain
-    // stale or cross-contaminated entries due to the Mongoose subdoc _id bug (fixed in schema).
+    const matchStage: Record<string, unknown> = { subCategory: { $exists: true, $ne: '' } };
+    if (category) matchStage.category = { $regex: `^${category}$`, $options: 'i' };
+
     const result = await this.productModel
       .aggregate([
-        {
-          $match: {
-            category: { $regex: `^${category}$`, $options: 'i' },
-            subCategory: { $exists: true, $ne: '' },
-          },
-        },
+        { $match: matchStage },
         { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
         { $sort: { productCount: -1 } },
         { $project: { _id: 0, name: '$_id', productCount: 1 } },
@@ -108,8 +97,6 @@ export class ProductsController {
     await this.cacheService.set(cacheKey, result, SUBCATEGORIES_TTL);
     return result;
   }
-
-  // ── GET /api/products ─────────────────────────────────────────────────────
 
   @Get()
   @ApiOperation({ summary: 'List products — paginated with filters and sort' })
@@ -152,7 +139,6 @@ export class ProductsController {
     else if (sortBy === 'name') sort.productName = sortOrder === 'asc' ? 1 : -1;
     else sort.createdAt = -1;
 
-    // Cache key includes all filter + pagination params
     const cacheKey = `products:list:${JSON.stringify({ filter, sort, skip, limitNum })}`;
     const cached = await this.cacheService.get<{ data: unknown[]; meta: unknown }>(cacheKey);
     if (cached) return cached;
@@ -183,8 +169,6 @@ export class ProductsController {
     return result;
   }
 
-  // ── GET /api/products/:id ─────────────────────────────────────────────────
-
   @Get(':id')
   @ApiOperation({ summary: 'Get full product detail — specs, images, seller' })
   async findOne(@Param('id') id: string) {
@@ -192,8 +176,6 @@ export class ProductsController {
     if (!product) throw new NotFoundException('Product not found');
     return product;
   }
-
-  // ── GET /api/products/:id/images ──────────────────────────────────────────
 
   @Get(':id/images')
   @ApiOperation({ summary: 'Get images array for a product' })
@@ -206,15 +188,13 @@ export class ProductsController {
     return { productId: id, images: product.images };
   }
 
-  // ── DELETE /api/products/:id ──────────────────────────────────────────────
-
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a product document' })
   async remove(@Param('id') id: string) {
     const result = await this.productModel.findByIdAndDelete(id).exec();
     if (!result) throw new NotFoundException('Product not found');
-    // Invalidate category caches since counts changed
+    
     await this.cacheService.delPattern('products:*');
   }
 }

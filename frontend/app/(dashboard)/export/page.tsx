@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { exportApi, productsApi } from '@/lib/api';
+import { exportApi, productsApi, sellersApi } from '@/lib/api';
 import { ExportJob, ExportFormat, CategoryInfo, SubcategoryInfo } from '@/types';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Globe,
   Loader2,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const FORMAT_META: Record<
   ExportFormat,
@@ -43,32 +45,117 @@ const FORMAT_META: Record<
   woocommerce_xml: { label: 'WooCommerce XML', icon: Globe, desc: 'WooCommerce WXR format' },
 };
 
+function DropdownSearch({
+  value,
+  onChange,
+  placeholder,
+  inputRef,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+      <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <input
+        ref={inputRef}
+        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        
+        onKeyDown={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 export default function ExportPage() {
   const qc = useQueryClient();
   const [format, setFormat] = useState<ExportFormat>('csv');
   const [category, setCategory] = useState('');
   const [subCategory, setSubCategory] = useState('');
+  const [seller, setSeller] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // Category dropdown
+  const [sellerSearch, setSellerSearch] = useState('');
+  const [categorySearch, setCategorySearch] = useState('');
+  const [subCategorySearch, setSubCategorySearch] = useState('');
+
+  const debouncedSellerSearch = useDebounce(sellerSearch, 300);
+  
+  const debouncedCategorySearch = useDebounce(categorySearch, 150);
+  const debouncedSubCategorySearch = useDebounce(subCategorySearch, 150);
+
+  const sellerSearchRef = useRef<HTMLInputElement>(null);
+  const categorySearchRef = useRef<HTMLInputElement>(null);
+  const subCategorySearchRef = useRef<HTMLInputElement>(null);
+
+  const [sellerOpen, setSellerOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [subCategoryOpen, setSubCategoryOpen] = useState(false);
+
+  useEffect(() => {
+    if (sellerOpen) setTimeout(() => sellerSearchRef.current?.focus(), 30);
+    else setSellerSearch('');
+  }, [sellerOpen]);
+
+  useEffect(() => {
+    if (categoryOpen) setTimeout(() => categorySearchRef.current?.focus(), 30);
+    else setCategorySearch('');
+  }, [categoryOpen]);
+
+  useEffect(() => {
+    if (subCategoryOpen) setTimeout(() => subCategorySearchRef.current?.focus(), 30);
+    else setSubCategorySearch('');
+  }, [subCategoryOpen]);
+
+  const { data: sellersData } = useQuery<{ data: { sellerName: string }[]; total: number }>({
+    queryKey: ['export-sellers', debouncedSellerSearch],
+    queryFn: () =>
+      sellersApi
+        .list({ search: debouncedSellerSearch || undefined, limit: 200 })
+        .then((r) => r.data),
+    staleTime: 2 * 60 * 1000,
+  });
+  const sellers = sellersData?.data ?? [];
+
   const { data: categories = [] } = useQuery<CategoryInfo[]>({
     queryKey: ['export-categories'],
     queryFn: () => productsApi.categories().then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Subcategory dropdown (dependent on category)
+  const filteredCategories = useMemo(
+    () =>
+      debouncedCategorySearch
+        ? categories.filter((c) =>
+            c.name.toLowerCase().includes(debouncedCategorySearch.toLowerCase()),
+          )
+        : categories,
+    [categories, debouncedCategorySearch],
+  );
+
   const { data: subcategories = [] } = useQuery<SubcategoryInfo[]>({
-    queryKey: ['export-subcategories', category],
-    queryFn: () =>
-      category ? productsApi.subcategories(category).then((r) => r.data) : Promise.resolve([]),
-    enabled: !!category,
+    queryKey: ['export-subcategories'],
+    queryFn: () => productsApi.subcategories().then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Export history
+  const filteredSubcategories = useMemo(
+    () =>
+      debouncedSubCategorySearch
+        ? subcategories.filter((s) =>
+            s.name.toLowerCase().includes(debouncedSubCategorySearch.toLowerCase()),
+          )
+        : subcategories,
+    [subcategories, debouncedSubCategorySearch],
+  );
+
   const { data: history, isLoading: historyLoading } = useQuery<{ data: ExportJob[] }>({
     queryKey: ['export-history'],
     queryFn: () => exportApi.list().then((r) => r.data),
@@ -82,11 +169,6 @@ export default function ExportPage() {
     },
   });
 
-  const handleCategoryChange = (val: string) => {
-    setCategory(val === '__all__' ? '' : val);
-    setSubCategory('');
-  };
-
   const handleDirectDownload = async () => {
     setIsDownloading(true);
     try {
@@ -94,10 +176,12 @@ export default function ExportPage() {
         format,
         category: category || undefined,
         subCategory: subCategory || undefined,
+        seller: seller || undefined,
       });
       toast.success(`${FORMAT_META[format].label} downloaded`);
     } catch (e: any) {
-      toast.error(e.response?.data?.message ?? 'Export failed');
+      const msg = e.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg.join(', ') : (msg ?? 'Export failed'));
     } finally {
       setIsDownloading(false);
     }
@@ -117,12 +201,12 @@ export default function ExportPage() {
   const fmt = FORMAT_META[format];
   const Icon = fmt.icon;
 
-  const scopeLabel =
-    subCategory
-      ? `${category} › ${subCategory}`
-      : category
-        ? category
-        : 'all products';
+  const scopeLabel = [
+    seller || null,
+    subCategory ? `${category} › ${subCategory}` : category || null,
+  ]
+    .filter(Boolean)
+    .join(', ') || 'all products';
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -133,14 +217,14 @@ export default function ExportPage() {
         </p>
       </div>
 
-      {/* Format picker */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Export Format</CardTitle>
           <CardDescription>Choose a format, apply filters, then download</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Format cards */}
+          {}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {(Object.entries(FORMAT_META) as [ExportFormat, typeof fmt][]).map(([key, meta]) => {
               const FIcon = meta.icon;
@@ -162,48 +246,109 @@ export default function ExportPage() {
             })}
           </div>
 
-          {/* Category + Subcategory filters */}
+          {}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Category</Label>
-              <Select value={category || '__all__'} onValueChange={handleCategoryChange}>
+
+            {}
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs">Seller</Label>
+              <Select
+                open={sellerOpen}
+                onOpenChange={setSellerOpen}
+                value={seller || '__all__'}
+                onValueChange={(v) => { setSeller(v === '__all__' ? '' : v); setSellerOpen(false); }}
+              >
                 <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="All categories" />
+                  <SelectValue placeholder="All sellers" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All categories</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c.name} value={c.name}>
-                      {c.name}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        ({c.productCount})
-                      </span>
+                  <DropdownSearch
+                    value={sellerSearch}
+                    onChange={setSellerSearch}
+                    placeholder="Search sellers…"
+                    inputRef={sellerSearchRef}
+                  />
+                  <SelectItem value="__all__">All sellers</SelectItem>
+                  {sellers.map((s) => (
+                    <SelectItem key={s.sellerName} value={s.sellerName}>
+                      {s.sellerName}
                     </SelectItem>
                   ))}
+                  {sellers.length === 0 && debouncedSellerSearch && (
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      No sellers found
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
+            {}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category</Label>
+              <Select
+                open={categoryOpen}
+                onOpenChange={setCategoryOpen}
+                value={category || '__all__'}
+                onValueChange={(v) => { setCategory(v === '__all__' ? '' : v); setCategoryOpen(false); }}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <DropdownSearch
+                    value={categorySearch}
+                    onChange={setCategorySearch}
+                    placeholder="Search categories…"
+                    inputRef={categorySearchRef}
+                  />
+                  <SelectItem value="__all__">All categories</SelectItem>
+                  {filteredCategories.map((c) => (
+                    <SelectItem key={c.name} value={c.name}>
+                      {c.name}
+                      <span className="ml-1 text-xs text-muted-foreground">({c.productCount})</span>
+                    </SelectItem>
+                  ))}
+                  {filteredCategories.length === 0 && debouncedCategorySearch && (
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      No categories found
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {}
             <div className="space-y-1.5">
               <Label className="text-xs">Sub-category</Label>
               <Select
+                open={subCategoryOpen}
+                onOpenChange={setSubCategoryOpen}
                 value={subCategory || '__all__'}
-                onValueChange={(v) => setSubCategory(v === '__all__' ? '' : v)}
-                disabled={!category || subcategories.length === 0}
+                onValueChange={(v) => { setSubCategory(v === '__all__' ? '' : v); setSubCategoryOpen(false); }}
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="All sub-categories" />
                 </SelectTrigger>
                 <SelectContent>
+                  <DropdownSearch
+                    value={subCategorySearch}
+                    onChange={setSubCategorySearch}
+                    placeholder="Search sub-categories…"
+                    inputRef={subCategorySearchRef}
+                  />
                   <SelectItem value="__all__">All sub-categories</SelectItem>
-                  {subcategories.map((s) => (
+                  {filteredSubcategories.map((s) => (
                     <SelectItem key={s.name} value={s.name}>
                       {s.name}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        ({s.productCount})
-                      </span>
+                      <span className="ml-1 text-xs text-muted-foreground">({s.productCount})</span>
                     </SelectItem>
                   ))}
+                  {filteredSubcategories.length === 0 && debouncedSubCategorySearch && (
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      No sub-categories found
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -214,11 +359,7 @@ export default function ExportPage() {
               Exporting <span className="font-medium">{scopeLabel}</span> as{' '}
               <span className="font-medium">{fmt.label}</span>
             </p>
-            <Button
-              onClick={handleDirectDownload}
-              disabled={isDownloading}
-              className="gap-2"
-            >
+            <Button onClick={handleDirectDownload} disabled={isDownloading} className="gap-2">
               {isDownloading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" /> Generating…
@@ -233,7 +374,7 @@ export default function ExportPage() {
         </CardContent>
       </Card>
 
-      {/* Export history (legacy async exports) */}
+      {}
       {(history?.data ?? []).length > 0 && (
         <Card>
           <CardHeader>
@@ -251,10 +392,7 @@ export default function ExportPage() {
                 const isReady = job.status === 'completed' && job.fileUrl;
                 const isProcessing = ['queued', 'processing'].includes(job.status);
                 return (
-                  <div
-                    key={job._id}
-                    className="flex items-center justify-between p-4 text-sm"
-                  >
+                  <div key={job._id} className="flex items-center justify-between p-4 text-sm">
                     <div className="flex items-center gap-3">
                       <FIcon className="h-4 w-4 text-muted-foreground" />
                       <div>
@@ -275,9 +413,7 @@ export default function ExportPage() {
                               : 'secondary'
                         }
                       >
-                        {isProcessing && (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        )}
+                        {isProcessing && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                         {job.status}
                       </Badge>
                       {isReady && (

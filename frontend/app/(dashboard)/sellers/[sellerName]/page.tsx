@@ -30,7 +30,6 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-// ── Product card ──────────────────────────────────────────────────────────────
 function ProductCard({ p }: { p: Product }) {
   const featured = p.images?.find((i) => i.isFeatured) ?? p.images?.[0];
   const imgSrc =
@@ -96,7 +95,6 @@ function ProductCard({ p }: { p: Product }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 const SORT_OPTIONS = [
   { value: 'createdAt:desc', label: 'Newest first' },
   { value: 'createdAt:asc', label: 'Oldest first' },
@@ -116,21 +114,18 @@ export default function SellerDetailPage() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Seller detail
   const { data: seller } = useQuery<Seller>({
     queryKey: ['seller', sellerName],
     queryFn: () => sellersApi.get(sellerName).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Categories for this seller
   const { data: categories = [] } = useQuery<CategoryInfo[]>({
     queryKey: ['seller-categories', sellerName],
     queryFn: () => sellersApi.categories(sellerName).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Subcategories for selected category
   const { data: subcategories = [] } = useQuery<SubcategoryInfo[]>({
     queryKey: ['seller-subcategories', sellerName, selectedCategory],
     queryFn: () =>
@@ -141,7 +136,6 @@ export default function SellerDetailPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Products
   const { data: productsData, isLoading } = useQuery<PaginatedResponse<Product>>({
     queryKey: [
       'seller-products',
@@ -188,9 +182,9 @@ export default function SellerDetailPage() {
 
   return (
     <div className="flex h-full min-h-0 gap-0 -m-6">
-      {/* ── Categories Panel ──────────────────────────────────────────────── */}
+      {}
       <aside className="w-56 shrink-0 border-r bg-background flex flex-col overflow-hidden">
-        {/* Header */}
+        {}
         <div className="sticky top-0 bg-background border-b px-4 py-3 shrink-0">
           <Link
             href="/sellers"
@@ -211,7 +205,7 @@ export default function SellerDetailPage() {
           </p>
         </div>
 
-        {/* Category list */}
+        {}
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
           <button
             onClick={() => handleCategorySelect('')}
@@ -249,24 +243,12 @@ export default function SellerDetailPage() {
           )}
         </nav>
 
-        {/* Make it collaborative placeholder */}
-        <div className="shrink-0 p-3 border-t">
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground/60 cursor-not-allowed"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Make it collaborative
-          </button>
-        </div>
       </aside>
 
-      {/* ── Products Panel ────────────────────────────────────────────────── */}
+      {}
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
         <div className="p-6 space-y-4">
-          {/* Header row */}
+          {}
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-xl font-bold">
@@ -297,7 +279,7 @@ export default function SellerDetailPage() {
             </Select>
           </div>
 
-          {/* Sub-categories checkbox row */}
+          {}
           {selectedCategory && subcategories.length > 0 && (
             <div className="flex flex-wrap gap-2 pb-1">
               {subcategories.map((sub) => {
@@ -345,7 +327,7 @@ export default function SellerDetailPage() {
             </div>
           )}
 
-          {/* Loading skeleton */}
+          {}
           {isLoading && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {Array.from({ length: 20 }).map((_, i) => (
@@ -357,7 +339,7 @@ export default function SellerDetailPage() {
             </div>
           )}
 
-          {/* Empty state */}
+          {}
           {!isLoading && productsData?.data.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-20 text-center">
               <Package className="h-10 w-10 text-muted-foreground/40" />
@@ -369,7 +351,7 @@ export default function SellerDetailPage() {
             </div>
           )}
 
-          {/* Product grid */}
+          {}
           {!isLoading && productsData && productsData.data.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {productsData.data.map((p) => (
@@ -378,7 +360,7 @@ export default function SellerDetailPage() {
             </div>
           )}
 
-          {/* Pagination */}
+          {}
           {productsData && totalPages > 1 && (
             <SmartPagination
               currentPage={page}
