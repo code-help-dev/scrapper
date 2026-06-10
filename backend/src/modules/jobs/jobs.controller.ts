@@ -14,7 +14,7 @@ import {
   MessageEvent,
 } from '@nestjs/common';
 
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Model } from 'mongoose';

@@ -193,7 +193,7 @@ export class ScraperService {
           .map((a) => a.href)
           .filter((h) => {
             if (!/aajjo\.com/i.test(h)) return false;
-            if (/aajjo\.com\/product\
+            if (/aajjo\.com\/product\//i.test(h)) return true;
             try {
               const base = new URL(listing);
               const candidate = new URL(h);
@@ -216,7 +216,7 @@ export class ScraperService {
         return anchors.filter((a) => {
           const h = a.href;
           if (!/aajjo\.com/i.test(h)) return false;
-          if (/aajjo\.com\/product\
+          if (/aajjo\.com\/product\//i.test(h)) return true;
           try {
             const base = new URL(listing);
             const candidate = new URL(h);
