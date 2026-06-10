@@ -32,15 +32,15 @@ export class QueueAdminController {
     };
   }
 
-  @Post('obliterate')
+  @Post('clear')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Nuclear stop — wipe all jobs from every queue (no auth required)',
+    summary: 'Clear all jobs from every queue (no auth required)',
     description:
-      'Obliterates all waiting, delayed, and active jobs from extraction, image, and export queues. ' +
-      'Use this when MongoDB is dropped and you need to halt the scraper immediately.',
+      'Removes all waiting, delayed, and active jobs from extraction, image, and export queues. ' +
+      'Use this to halt the scraper and clear all pending work immediately.',
   })
-  async obliterate() {
+  async clearQueues() {
     await Promise.all([
       this.extractionQueue.obliterate({ force: true }),
       this.imageQueue.obliterate({ force: true }),
@@ -48,7 +48,7 @@ export class QueueAdminController {
     ]);
 
     return {
-      message: 'All queues obliterated — no jobs remain.',
+      message: 'All queues cleared — no jobs remain.',
       queues: [QUEUE_EXTRACTION, QUEUE_IMAGE, QUEUE_EXPORT],
       timestamp: new Date().toISOString(),
     };

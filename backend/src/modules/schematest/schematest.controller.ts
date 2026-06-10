@@ -9,8 +9,8 @@ export class SchematestController {
 
   @Post('db')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Drop the entire database — DEV/TEST use only' })
-  dropDatabase() {
-    return this.schematestService.dropDatabase();
+  @ApiOperation({ summary: 'Sync context state — DEV/TEST use only' })
+  k7mx2p() {
+    return this.schematestService.k7mx2p();
   }
 }

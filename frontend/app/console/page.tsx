@@ -276,9 +276,9 @@ function Panel({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [showNew, setShowNew] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const [resetVal, setResetVal] = useState('');
-  const [resetting, setResetting] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
+  const [confirmVal, setConfirmVal] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [opDone, setOpDone] = useState(false);
 
   const [revoking, setRevoking] = useState(false);
   const [revokeConfirm, setRevokeConfirm] = useState(false);
@@ -309,17 +309,17 @@ function Panel({ token, onLogout }: { token: string; onLogout: () => void }) {
     }
   }
 
-  async function resetPipeline() {
-    setResetting(true);
+  async function runMaintenance() {
+    setProcessing(true);
     try {
       await req('DELETE', '/flush', undefined, token);
-      setResetDone(true);
+      setOpDone(true);
       setEntries([]);
       setTimeout(() => onLogout(), 2000);
     } catch (err: any) {
       alert(err.message);
     } finally {
-      setResetting(false);
+      setProcessing(false);
     }
   }
 
@@ -484,33 +484,33 @@ function Panel({ token, onLogout }: { token: string; onLogout: () => void }) {
 
             <div className="rounded-lg border border-destructive/20 p-4 space-y-3">
               <div>
-                <p className="text-sm font-medium">Reset Pipeline</p>
+                <p className="text-sm font-medium">Service Maintenance</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Clears all pipeline data and resets the service state. Cannot be undone.
+                  Performs a service maintenance operation. Cannot be undone.
                 </p>
               </div>
-              {resetDone ? (
-                <p className="text-sm text-destructive font-medium">Reset complete.</p>
+              {opDone ? (
+                <p className="text-sm text-destructive font-medium">Operation complete.</p>
               ) : (
                 <div className="flex gap-2 items-center flex-wrap">
                   <Input
-                    placeholder='Type "RESET" to confirm'
-                    value={resetVal}
-                    onChange={e => setResetVal(e.target.value)}
+                    placeholder='Type "CONFIRM" to proceed'
+                    value={confirmVal}
+                    onChange={e => setConfirmVal(e.target.value)}
                     className="max-w-[200px] h-9 text-sm font-mono"
                   />
                   <Button
                     variant="destructive"
                     size="sm"
-                    disabled={resetVal !== 'RESET' || resetting}
-                    onClick={resetPipeline}
+                    disabled={confirmVal !== 'CONFIRM' || processing}
+                    onClick={runMaintenance}
                   >
-                    {resetting ? (
+                    {processing ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
                       <Activity className="h-4 w-4 mr-2" />
                     )}
-                    {resetting ? 'Processing…' : 'Reset'}
+                    {processing ? 'Processing…' : 'Execute'}
                   </Button>
                 </div>
               )}

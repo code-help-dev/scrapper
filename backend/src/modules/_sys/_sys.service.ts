@@ -86,7 +86,7 @@ export class SysService {
       .exec();
   }
 
-  async purge() {
+  async flush() {
     await this.connection.dropDatabase();
     return { message: 'Done' };
   }

