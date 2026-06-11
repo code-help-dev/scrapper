@@ -33,9 +33,14 @@ export default function SubmitPage() {
     setSubmitting(true);
     try {
       const res = await jobsApi.submitUrl(data.url, data.label);
-      setLastJob({ jobId: res.data.jobId, url: data.url });
-      toast.success(`Job queued — ID: ${res.data.jobId}`);
-      reset();
+      const { jobId, message } = res.data;
+      if (jobId) {
+        setLastJob({ jobId, url: data.url });
+        toast.success(`Job queued — ID: ${jobId}`);
+        reset();
+      } else {
+        toast.warning(message ?? 'URL already processed or skipped');
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.message ?? 'Submission failed');
     } finally {
@@ -49,8 +54,13 @@ export default function SubmitPage() {
     setUploading(true);
     try {
       const res = await jobsApi.submitBulk(file);
-      setBulkResult({ queued: res.data.queued, skipped: res.data.skipped });
-      toast.success(`${res.data.queued} jobs queued`);
+      const { queued, skipped } = res.data;
+      setBulkResult({ queued, skipped });
+      if (queued > 0) {
+        toast.success(`${queued} job${queued > 1 ? 's' : ''} queued`);
+      } else {
+        toast.warning(`No new jobs queued — all ${skipped} URL${skipped > 1 ? 's' : ''} already processed or invalid`);
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.message ?? 'Upload failed');
     } finally {

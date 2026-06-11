@@ -13,11 +13,12 @@ import {
   ForbiddenException,
   Sse,
   MessageEvent,
+  Logger,
 } from '@nestjs/common';
 
 const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Observable, interval, from } from 'rxjs';
 import { map, switchMap, takeWhile } from 'rxjs/operators';
 import {
@@ -34,7 +35,6 @@ import {
   ExtractionJobDocument,
 } from '../database/schemas/extraction-job.schema';
 import { JobStatus } from '../../common/enums/job-status.enum';
-import { JOB_SCRAPE_URL } from '../queue/queue.constants';
 import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
 import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
@@ -49,6 +49,8 @@ const TERMINAL_STATUSES = [
 @UseGuards(JwtAuthGuard)
 @Controller('jobs')
 export class JobsController {
+  private readonly logger = new Logger(JobsController.name);
+
   constructor(
     @InjectModel(ExtractionJob.name)
     private readonly jobModel: Model<ExtractionJobDocument>,
@@ -69,8 +71,18 @@ export class JobsController {
     @Query('search') search?: string,
   ) {
     const skip = (Number(page) - 1) * Number(limit);
+    const isAdmin = user.role === UserRole.ADMIN;
+
+    this.logger.log(`GET /jobs — userId=${user.id} role="${user.role}" isAdmin=${isAdmin}`);
+
     const filter: Record<string, unknown> = {};
-    if (user.role !== UserRole.ADMIN) filter.submittedBy = user.id;
+    if (!isAdmin) {
+      if (!user.id || !Types.ObjectId.isValid(user.id)) {
+        this.logger.error(`Invalid userId in JWT: "${user.id}"`);
+        return { data: [], meta: { total: 0, page: Number(page), limit: Number(limit), pages: 0 } };
+      }
+      filter.submittedBy = { $eq: new Types.ObjectId(user.id) };
+    }
     if (status) filter.status = status;
     if (search) filter.sourceUrl = { $regex: search, $options: 'i' };
 
@@ -84,6 +96,8 @@ export class JobsController {
         .exec(),
       this.jobModel.countDocuments(filter).exec(),
     ]);
+
+    this.logger.log(`GET /jobs — matched=${total} filter=${JSON.stringify({ submittedBy: filter.submittedBy ? user.id : 'ALL' })}`);
 
     return {
       data: items,
