@@ -1,8 +1,10 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 import {
   ExtractionJob,
@@ -26,7 +28,11 @@ export class DashboardController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Extraction & system stats for the dashboard' })
-  async getStats() {
+  async getStats(@CurrentUser() user: { id: string; role: string }) {
+    const isAdmin = user.role === UserRole.ADMIN;
+    const productFilter = isAdmin ? {} : { ownedBy: new Types.ObjectId(user.id) };
+    const jobFilter = isAdmin ? {} : { submittedBy: new Types.ObjectId(user.id) };
+
     const [
       totalProducts,
       completedProducts,
@@ -39,21 +45,23 @@ export class DashboardController {
       avgConfidenceResult,
       categoryBreakdown,
     ] = await Promise.all([
-      this.productModel.countDocuments().exec(),
-      this.productModel.countDocuments({ extractionStatus: 'completed' }).exec(),
-      this.productModel.countDocuments({ extractionStatus: 'failed' }).exec(),
-      this.productModel.countDocuments({ isFlagged: true }).exec(),
-      this.jobModel.countDocuments({ status: 'queued' }).exec(),
-      this.jobModel.countDocuments({ status: 'processing' }).exec(),
-      this.jobModel.countDocuments({ status: 'completed' }).exec(),
-      this.jobModel.countDocuments({ status: 'failed' }).exec(),
+      this.productModel.countDocuments(productFilter).exec(),
+      this.productModel.countDocuments({ ...productFilter, extractionStatus: 'completed' }).exec(),
+      this.productModel.countDocuments({ ...productFilter, extractionStatus: 'failed' }).exec(),
+      this.productModel.countDocuments({ ...productFilter, isFlagged: true }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'queued' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'processing' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'completed' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'failed' }).exec(),
       this.productModel
         .aggregate([
+          { $match: productFilter },
           { $group: { _id: null, avg: { $avg: '$confidenceScore' } } },
         ])
         .exec(),
       this.productModel
         .aggregate([
+          { $match: productFilter },
           { $group: { _id: '$category', count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $limit: 10 },
@@ -90,9 +98,10 @@ export class DashboardController {
 
   @Get('jobs')
   @ApiOperation({ summary: 'Recent extraction jobs for job-monitor panel' })
-  async getJobs() {
+  async getJobs(@CurrentUser() user: { id: string; role: string }) {
+    const filter = user.role === UserRole.ADMIN ? {} : { submittedBy: new Types.ObjectId(user.id) };
     const jobs = await this.jobModel
-      .find()
+      .find(filter)
       .sort({ createdAt: -1 })
       .limit(50)
       .lean()
@@ -102,9 +111,11 @@ export class DashboardController {
 
   @Get('jobs/failed')
   @ApiOperation({ summary: 'Failed jobs — with error reasons for retry panel' })
-  async getFailedJobs() {
+  async getFailedJobs(@CurrentUser() user: { id: string; role: string }) {
+    const filter: Record<string, unknown> = { status: 'failed' };
+    if (user.role !== UserRole.ADMIN) filter.submittedBy = new Types.ObjectId(user.id);
     const jobs = await this.jobModel
-      .find({ status: 'failed' })
+      .find(filter)
       .sort({ createdAt: -1 })
       .lean()
       .exec();
@@ -113,9 +124,10 @@ export class DashboardController {
 
   @Get('exports')
   @ApiOperation({ summary: 'Export history — completed export files' })
-  async getExportHistory() {
+  async getExportHistory(@CurrentUser() user: { id: string; role: string }) {
+    const filter = user.role === UserRole.ADMIN ? {} : { generatedBy: new Types.ObjectId(user.id) };
     const exports = await this.exportJobModel
-      .find()
+      .find(filter)
       .sort({ createdAt: -1 })
       .limit(50)
       .lean()

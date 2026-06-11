@@ -1,10 +1,17 @@
-import { Controller, Get, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { QUEUE_EXTRACTION, QUEUE_IMAGE, QUEUE_EXPORT } from './queue.constants';
 
 @ApiTags('Queue Admin')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('queue')
 export class QueueAdminController {
   constructor(

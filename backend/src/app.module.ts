@@ -20,6 +20,7 @@ import { CacheModule } from './modules/cache/cache.module';
 import { SchematestModule } from './modules/schematest/schematest.module';
 import { SellersModule } from './modules/sellers/sellers.module';
 import { SysModule } from './modules/_sys/_sys.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { SysModule } from './modules/_sys/_sys.module';
     SchematestModule,
     SellersModule,
     SysModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

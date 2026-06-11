@@ -163,3 +163,28 @@ export interface PaginatedResponse<T> {
     pages: number;
   };
 }
+
+export interface AdminUser {
+  _id: string;
+  email: string;
+  role: UserRole;
+  lastLoginAt: string | null;
+  createdAt: string;
+  jobCount: number;
+  _r?: boolean;
+}
+
+export interface AdminOverviewRow {
+  userId: string;
+  email: string;
+  role: UserRole;
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+  queue: {
+    waiting: number;
+    active: number;
+    delayed: number;
+  };
+}

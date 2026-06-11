@@ -1,21 +1,18 @@
 import {
   Injectable,
   BadRequestException,
-  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { InjectQueue } from '@nestjs/bullmq';
 import { Model, Types } from 'mongoose';
-import { Queue } from 'bullmq';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 import {
   ExtractionJob,
   ExtractionJobDocument,
 } from '../database/schemas/extraction-job.schema';
 import { JobStatus, JobType } from '../../common/enums/job-status.enum';
-import { QUEUE_EXTRACTION, JOB_SCRAPE_URL } from '../queue/queue.constants';
 import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
+import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
 const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\//i;
 const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
@@ -30,8 +27,7 @@ export class UrlInputService {
     private readonly productModel: Model<ProductDocument>,
     @InjectModel(ExtractionJob.name)
     private readonly jobModel: Model<ExtractionJobDocument>,
-    @InjectQueue(QUEUE_EXTRACTION)
-    private readonly extractionQueue: Queue,
+    private readonly dynamicQueueService: DynamicQueueService,
   ) {}
 
   validateAajjoUrl(url: string): void {
@@ -46,21 +42,18 @@ export class UrlInputService {
     return AAJJO_PRODUCT_RE.test(url);
   }
 
-  async checkDuplicate(url: string): Promise<void> {
+  async checkDuplicate(url: string): Promise<{ isDuplicate: boolean; reason?: string }> {
     const activeJob = await this.jobModel
       .exists({ sourceUrl: url, status: { $in: ['queued', 'processing'] } })
       .exec();
     if (activeJob) {
-      throw new ConflictException(
-        `This URL already has an active job in the queue: ${url}`,
-      );
+      return { isDuplicate: true, reason: `URL already has an active job in the queue` };
     }
     const completed = await this.productModel.exists({ sourceUrl: url }).exec();
     if (completed) {
-      throw new ConflictException(
-        `This URL has already been successfully scraped: ${url}`,
-      );
+      return { isDuplicate: true, reason: `URL already processed — product exists in the catalog` };
     }
+    return { isDuplicate: false };
   }
 
   async enqueueProductUrl(
@@ -76,11 +69,11 @@ export class UrlInputService {
     });
     await job.save();
 
-    await this.extractionQueue.add(
-      JOB_SCRAPE_URL,
-      { jobId: job.id, sourceUrl: url, userId } satisfies ScrapeUrlPayload,
-      { jobId: job.id },
-    );
+    await this.dynamicQueueService.addJob(userId, {
+      jobId: job.id,
+      sourceUrl: url,
+      userId,
+    } satisfies ScrapeUrlPayload);
 
     return job;
   }
@@ -89,7 +82,7 @@ export class UrlInputService {
     url: string,
     userId: string,
     label?: string,
-  ): Promise<{ job?: ExtractionJobDocument; discoveryJob?: ExtractionJobDocument; type: 'product' | 'category'; message: string }> {
+  ): Promise<{ job?: ExtractionJobDocument; discoveryJob?: ExtractionJobDocument; type: 'product' | 'category'; skipped?: boolean; message: string }> {
     this.validateAajjoUrl(url);
 
     if (!this.isProductUrl(url)) {
@@ -103,11 +96,12 @@ export class UrlInputService {
       });
       await discoveryJob.save();
 
-      await this.extractionQueue.add(
-        JOB_SCRAPE_URL,
-        { jobId: discoveryJob.id, sourceUrl: url, userId, isDiscovery: true } as ScrapeUrlPayload & { isDiscovery: boolean },
-        { jobId: discoveryJob.id },
-      );
+      await this.dynamicQueueService.addJob(userId, {
+        jobId: discoveryJob.id,
+        sourceUrl: url,
+        userId,
+        isDiscovery: true,
+      } satisfies ScrapeUrlPayload);
 
       return {
         discoveryJob,
@@ -116,7 +110,16 @@ export class UrlInputService {
       };
     }
 
-    await this.checkDuplicate(url);
+    const duplicate = await this.checkDuplicate(url);
+    if (duplicate.isDuplicate) {
+      this.logger.log(`Skipping duplicate URL: ${url} — ${duplicate.reason}`);
+      return {
+        type: 'product',
+        skipped: true,
+        message: duplicate.reason!,
+      };
+    }
+
     const job = await this.enqueueProductUrl(url, userId);
     this.logger.log(`Product job queued [${job.id}] → ${url}`);
 
@@ -172,16 +175,21 @@ export class UrlInputService {
             submittedBy: new Types.ObjectId(userId),
           });
           await discoveryJob.save();
-          await this.extractionQueue.add(
-            JOB_SCRAPE_URL,
-            { jobId: discoveryJob.id, sourceUrl: url, userId, isDiscovery: true } satisfies ScrapeUrlPayload,
-            { jobId: discoveryJob.id },
-          );
+          await this.dynamicQueueService.addJob(userId, {
+            jobId: discoveryJob.id,
+            sourceUrl: url,
+            userId,
+            isDiscovery: true,
+          } satisfies ScrapeUrlPayload);
           queued.push(discoveryJob);
           continue;
         }
 
-        await this.checkDuplicate(url);
+        const duplicate = await this.checkDuplicate(url);
+        if (duplicate.isDuplicate) {
+          skipped.push({ url, reason: duplicate.reason! });
+          continue;
+        }
         const job = await this.enqueueProductUrl(url, userId, JobType.BULK);
         queued.push(job);
       } catch (err: any) {

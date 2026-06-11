@@ -410,14 +410,17 @@ export class ExtractorService {
         const readElement = (el: Element | null): string => {
           if (!el) return '';
 
-          const direct = (el as HTMLElement).innerText?.trim() ?? '';
+          const normalize = (e: Element): string =>
+            (e.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+          const direct = normalize(el);
           if (direct.length > 20) return direct;
 
           const parts: string[] = [];
           let node: Element | null = el.nextElementSibling;
           let guard = 0;
           while (node && guard < 10 && !/^H[123]$/.test(node.tagName)) {
-            const text = (node as HTMLElement).innerText?.trim();
+            const text = normalize(node);
             if (text && text.length > 10) parts.push(text);
             node = node.nextElementSibling;
             guard++;
@@ -456,7 +459,7 @@ export class ExtractorService {
           '[class*="description"]:not([class*="meta"])',
         ]) {
           const el = document.querySelector(sel);
-          const text = (el as HTMLElement | null)?.innerText?.trim();
+          const text = el?.textContent?.replace(/\s+/g, ' ').trim();
           if (text && text.length > 20) return text;
         }
 

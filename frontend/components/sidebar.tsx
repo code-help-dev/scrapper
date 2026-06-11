@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   Link2, ListChecks, Package, Download, BarChart2,
-  LogOut, Activity, Users,
+  LogOut, Activity, Users, ShieldCheck, LayoutDashboard,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,11 @@ const NAV_MAIN = [
   { href: '/jobs',     icon: ListChecks, label: 'Job Monitor' },
   { href: '/products', icon: Package,    label: 'Products' },
   { href: '/export',   icon: Download,   label: 'Export' },
+];
+
+const NAV_ADMIN = [
+  { href: '/admin/overview', icon: LayoutDashboard, label: 'Admin Overview' },
+  { href: '/admin/users',    icon: ShieldCheck,     label: 'User Management' },
 ];
 
 export function Sidebar() {
@@ -97,10 +102,8 @@ export function Sidebar() {
           </Link>
         ))}
 
-        {}
         <div className="my-2 border-t" />
 
-        {}
         <Link
           href="/sellers"
           title={collapsed ? 'List of Sellers' : undefined}
@@ -115,6 +118,34 @@ export function Sidebar() {
           <Users className="h-4 w-4 shrink-0" />
           {!collapsed && 'List of Sellers'}
         </Link>
+
+        {(session?.user as any)?.role === 'admin' && (
+          <>
+            <div className="my-2 border-t" />
+            {!collapsed && (
+              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Admin
+              </p>
+            )}
+            {NAV_ADMIN.map(({ href, icon: Icon, label }) => (
+              <Link
+                key={href}
+                href={href}
+                title={collapsed ? label : undefined}
+                className={cn(
+                  'flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center' : 'gap-3 px-3',
+                  pathname.startsWith(href)
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && label}
+              </Link>
+            ))}
+          </>
+        )}
       </nav>
 
       {}

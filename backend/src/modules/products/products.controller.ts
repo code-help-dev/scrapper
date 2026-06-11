@@ -8,9 +8,10 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   ApiTags,
   ApiOperation,
@@ -18,6 +19,8 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 import { Category, CategoryDocument } from '../database/schemas/category.schema';
 import { CacheService } from '../cache/cache.service';
@@ -41,27 +44,19 @@ export class ProductsController {
 
   @Get('categories')
   @ApiOperation({ summary: 'Get unique main categories with product counts' })
-  async getCategories() {
-    const cacheKey = 'products:categories';
+  async getCategories(@CurrentUser() user: { id: string; role: string }) {
+    const cacheKey = user.role === UserRole.ADMIN
+      ? 'products:categories'
+      : `products:categories:${user.id}`;
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    const fromCollection = await this.categoryModel
-      .find()
-      .select('name productCount')
-      .sort({ productCount: -1 })
-      .lean()
-      .exec();
-
-    if (fromCollection.length > 0) {
-      const result = fromCollection.map((c) => ({ name: c.name, productCount: c.productCount }));
-      await this.cacheService.set(cacheKey, result, CATEGORIES_TTL);
-      return result;
-    }
+    const matchStage: Record<string, unknown> = { category: { $exists: true, $ne: '' } };
+    if (user.role !== UserRole.ADMIN) matchStage.ownedBy = new Types.ObjectId(user.id);
 
     const result = await this.productModel
       .aggregate([
-        { $match: { category: { $exists: true, $ne: '' } } },
+        { $match: matchStage },
         { $group: { _id: '$category', productCount: { $sum: 1 } } },
         { $sort: { productCount: -1 } },
         { $project: { _id: 0, name: '$_id', productCount: 1 } },
@@ -75,15 +70,20 @@ export class ProductsController {
   @Get('subcategories')
   @ApiOperation({ summary: 'Get subcategories, optionally filtered by main category' })
   @ApiQuery({ name: 'category', required: false })
-  async getSubcategories(@Query('category') category?: string) {
+  async getSubcategories(
+    @CurrentUser() user: { id: string; role: string },
+    @Query('category') category?: string,
+  ) {
+    const userKey = user.role === UserRole.ADMIN ? '__admin__' : user.id;
     const cacheKey = category
-      ? `products:subcategories:${category.toLowerCase().replace(/\s+/g, '_')}`
-      : 'products:subcategories:__all__';
+      ? `products:subcategories:${userKey}:${category.toLowerCase().replace(/\s+/g, '_')}`
+      : `products:subcategories:${userKey}:__all__`;
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
     const matchStage: Record<string, unknown> = { subCategory: { $exists: true, $ne: '' } };
     if (category) matchStage.category = { $regex: `^${category}$`, $options: 'i' };
+    if (user.role !== UserRole.ADMIN) matchStage.ownedBy = new Types.ObjectId(user.id);
 
     const result = await this.productModel
       .aggregate([
@@ -111,6 +111,7 @@ export class ProductsController {
   @ApiQuery({ name: 'sortBy', required: false, enum: ['createdAt', 'price', 'name'] })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   async findAll(
+    @CurrentUser() user: { id: string; role: string },
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('status') status?: string,
@@ -127,6 +128,7 @@ export class ProductsController {
     const skip = (pageNum - 1) * limitNum;
 
     const filter: Record<string, unknown> = {};
+    if (user.role !== UserRole.ADMIN) filter.ownedBy = new Types.ObjectId(user.id);
     if (status) filter.extractionStatus = status;
     if (category) filter.category = { $regex: `^${category}$`, $options: 'i' };
     if (subCategory) filter.subCategory = { $regex: `^${subCategory}$`, $options: 'i' };
@@ -171,30 +173,48 @@ export class ProductsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get full product detail — specs, images, seller' })
-  async findOne(@Param('id') id: string) {
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
     const product = await this.productModel.findById(id).exec();
     if (!product) throw new NotFoundException('Product not found');
+    if (user.role !== UserRole.ADMIN && product.ownedBy?.toString() !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
     return product;
   }
 
   @Get(':id/images')
   @ApiOperation({ summary: 'Get images array for a product' })
-  async getImages(@Param('id') id: string) {
+  async getImages(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
     const product = await this.productModel
       .findById(id)
-      .select('images productName')
+      .select('images productName ownedBy')
       .exec();
     if (!product) throw new NotFoundException('Product not found');
+    if (user.role !== UserRole.ADMIN && product.ownedBy?.toString() !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
     return { productId: id, images: product.images };
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a product document' })
-  async remove(@Param('id') id: string) {
-    const result = await this.productModel.findByIdAndDelete(id).exec();
-    if (!result) throw new NotFoundException('Product not found');
-    
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    const product = await this.productModel.findById(id).exec();
+    if (!product) throw new NotFoundException('Product not found');
+    if (user.role !== UserRole.ADMIN && product.ownedBy?.toString() !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
+    await product.deleteOne();
     await this.cacheService.delPattern('products:*');
   }
 }

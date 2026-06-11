@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ExtractionStatus } from '../../../common/enums/extraction-status.enum';
+import { User } from './user.schema';
 
 export type ProductDocument = Product & Document;
 
@@ -86,10 +87,14 @@ export class Product {
 
   @Prop()
   contentHash: string;
+
+  @Prop({ type: Types.ObjectId, ref: User.name })
+  ownedBy?: Types.ObjectId;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
 
+ProductSchema.index({ ownedBy: 1 });
 ProductSchema.index({ extractionStatus: 1 });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ category: 1, subCategory: 1 });

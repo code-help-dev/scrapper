@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { UserDocument } from '../database/schemas/user.schema';
 import { RegisterDto } from './dto/register.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly dynamicQueueService: DynamicQueueService,
   ) {}
 
   async validateUser(
@@ -59,7 +61,9 @@ export class AuthService {
     }
 
     const role = totalUsers === 0 ? UserRole.ADMIN : (dto.role ?? UserRole.OPERATOR);
-    return this.usersService.create(dto.email, dto.password, role);
+    const user = await this.usersService.create(dto.email, dto.password, role);
+    this.dynamicQueueService.createQueueForUser(user.id);
+    return user;
   }
 
   async refreshTokens(userId: string, refreshToken: string) {

@@ -160,3 +160,13 @@ export const dashboardApi = {
 export const healthApi = {
   check: () => api.get('/health'),
 };
+
+export const adminApi = {
+  listUsers: () => api.get('/admin/users'),
+  createUser: (email: string, password: string, role: string) =>
+    api.post('/admin/users', { email, password, role }),
+  updateUser: (id: string, updates: { role?: string; active?: boolean }) =>
+    api.patch(`/admin/users/${id}`, updates),
+  getOverview: () => api.get('/admin/overview'),
+  getUserJobCounts: (id: string) => api.get(`/admin/users/${id}/jobs`),
+};

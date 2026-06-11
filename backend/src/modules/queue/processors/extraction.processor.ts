@@ -1,5 +1,5 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, forwardRef, Inject } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -7,7 +7,6 @@ import { createHash } from 'crypto';
 import {
   QUEUE_EXTRACTION,
   QUEUE_IMAGE,
-  JOB_SCRAPE_URL,
   JOB_PROCESS_IMAGE,
 } from '../queue.constants';
 import {
@@ -22,6 +21,7 @@ import { ScraperService } from '../../scraper/scraper.service';
 import { ExtractorService } from '../../extractor/extractor.service';
 import { NormalizationService } from '../../normalization/normalization.service';
 import { SellersService } from '../../sellers/sellers.service';
+import { DynamicQueueService } from '../dynamic-queue.service';
 
 export interface ScrapeUrlPayload {
   jobId: string;
@@ -49,8 +49,8 @@ export class ExtractionProcessor extends WorkerHost {
     private readonly categoryModel: Model<CategoryDocument>,
     @InjectQueue(QUEUE_IMAGE)
     private readonly imageQueue: Queue,
-    @InjectQueue(QUEUE_EXTRACTION)
-    private readonly extractionQueue: Queue,
+    @Inject(forwardRef(() => DynamicQueueService))
+    private readonly dynamicQueueService: DynamicQueueService,
     private readonly scraperService: ScraperService,
     private readonly extractorService: ExtractorService,
     private readonly normalizationService: NormalizationService,
@@ -70,11 +70,9 @@ export class ExtractionProcessor extends WorkerHost {
 
     try {
       if (isDiscovery) {
-        
         await this.processDiscovery(jobId, sourceUrl, userId);
       } else {
-        
-        await this.processProduct(jobId, sourceUrl);
+        await this.processProduct(jobId, sourceUrl, userId);
         await this.bumpParent(parentJobId, 'processedCount');
       }
     } catch (error: any) {
@@ -133,11 +131,12 @@ export class ExtractionProcessor extends WorkerHost {
       });
       await childJob.save();
 
-      await this.extractionQueue.add(
-        JOB_SCRAPE_URL,
-        { jobId: childJob.id, sourceUrl: url, userId, parentJobId: jobId } satisfies ScrapeUrlPayload,
-        { jobId: childJob.id },
-      );
+      await this.dynamicQueueService.addJob(userId, {
+        jobId: childJob.id,
+        sourceUrl: url,
+        userId,
+        parentJobId: jobId,
+      } satisfies ScrapeUrlPayload);
       queued++;
     }
 
@@ -165,7 +164,7 @@ export class ExtractionProcessor extends WorkerHost {
     this.logger.log(`[${jobId}] Discovery done — ${queued} product jobs queued`);
   }
 
-  private async processProduct(jobId: string, sourceUrl: string): Promise<void> {
+  private async processProduct(jobId: string, sourceUrl: string, userId: string): Promise<void> {
     this.logger.log(`[${jobId}] Extracting ${sourceUrl}`);
 
     const extracted = await this.scraperService.withPage(
@@ -207,6 +206,7 @@ export class ExtractionProcessor extends WorkerHost {
           isFlagged: normalized.confidenceScore < 70,
           contentHash,
           sourcePlatform: 'aajjo',
+          ownedBy: new Types.ObjectId(userId),
         },
       },
       { upsert: true, new: true },
