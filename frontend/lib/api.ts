@@ -5,10 +5,25 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
 export const api = axios.create({ baseURL: API_BASE });
 
+// Shared promise so concurrent requests on the same page all reuse one getSession() call
+// instead of each awaiting it independently. Cleared on 401 so an expired token forces a fresh fetch.
+let sessionPromise: Promise<string | null> | null = null;
+
+function getCachedToken(): Promise<string | null> {
+  if (!sessionPromise) {
+    sessionPromise = getSession().then((s) => s?.accessToken ?? null);
+  }
+  return sessionPromise;
+}
+
+function clearTokenCache() {
+  sessionPromise = null;
+}
+
 api.interceptors.request.use(async (config) => {
-  const session = await getSession();
-  if (session?.accessToken) {
-    config.headers.Authorization = `Bearer ${session.accessToken}`;
+  const token = await getCachedToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -17,6 +32,7 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     if (error.response?.status === 401) {
+      clearTokenCache();
       const session = await getSession();
       if (!session || (session as any).error === 'RefreshAccessTokenError') {
         await signOut({ redirect: true, callbackUrl: '/login' });
