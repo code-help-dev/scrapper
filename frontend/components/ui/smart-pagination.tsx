@@ -76,28 +76,36 @@ export function SmartPagination({
           <ChevronLeft className="h-3.5 w-3.5" />
         </Button>
 
-        {pages.map((p, i) =>
-          p === 'ellipsis' ? (
-            <span
-              key={`ellipsis-${i}`}
-              className="px-1 text-xs text-muted-foreground select-none"
-            >
-              …
-            </span>
-          ) : (
-            <Button
-              key={p}
-              size="sm"
-              variant={currentPage === p ? 'default' : 'outline'}
-              className="h-7 min-w-7 px-1.5 text-xs font-normal tabular-nums"
-              onClick={() => onPageChange(p)}
-              aria-label={`Page ${p}`}
-              aria-current={currentPage === p ? 'page' : undefined}
-            >
-              {p}
-            </Button>
-          ),
-        )}
+        {/* Page number buttons hidden on xs screens to avoid overflow */}
+        <div className="hidden sm:flex flex-wrap items-center gap-1">
+          {pages.map((p, i) =>
+            p === 'ellipsis' ? (
+              <span
+                key={`ellipsis-${i}`}
+                className="px-1 text-xs text-muted-foreground select-none"
+              >
+                …
+              </span>
+            ) : (
+              <Button
+                key={p}
+                size="sm"
+                variant={currentPage === p ? 'default' : 'outline'}
+                className="h-7 min-w-7 px-1.5 text-xs font-normal tabular-nums"
+                onClick={() => onPageChange(p)}
+                aria-label={`Page ${p}`}
+                aria-current={currentPage === p ? 'page' : undefined}
+              >
+                {p}
+              </Button>
+            ),
+          )}
+        </div>
+
+        {/* On xs screens show just current page indicator */}
+        <span className="sm:hidden text-xs text-muted-foreground px-2 tabular-nums">
+          {currentPage} / {totalPages}
+        </span>
 
         <Button
           size="icon"
@@ -110,9 +118,9 @@ export function SmartPagination({
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>
 
-        <form onSubmit={handleJump} className="ml-2 flex items-center gap-1">
+        <form onSubmit={handleJump} className="ml-1 sm:ml-2 flex items-center gap-1">
           <Input
-            className="h-7 w-20 text-xs text-center"
+            className="h-7 w-16 sm:w-20 text-xs text-center"
             placeholder="Go to…"
             value={jumpValue}
             onChange={(e) => setJumpValue(e.target.value)}

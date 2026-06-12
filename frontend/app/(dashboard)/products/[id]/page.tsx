@@ -25,7 +25,7 @@ export default function ProductDetailPage() {
   const extendedSpecs = product.specifications.filter((s) => s.section === 'extended');
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-4 sm:space-y-6 max-w-5xl">
       {}
       <div className="flex items-start gap-4">
         <Link href="/products">

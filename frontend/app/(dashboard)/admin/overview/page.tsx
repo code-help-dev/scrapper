@@ -51,7 +51,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-5 flex items-center gap-3">
             <Clock className="h-7 w-7 text-yellow-500 opacity-70" />
@@ -109,7 +109,8 @@ export default function AdminOverviewPage() {
           ) : rows.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">No users found</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
@@ -162,6 +163,7 @@ export default function AdminOverviewPage() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

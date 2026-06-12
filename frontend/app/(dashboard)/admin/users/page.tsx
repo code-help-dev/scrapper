@@ -105,7 +105,7 @@ export default function AdminUsersPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-5 flex items-center gap-3">
             <Users className="h-7 w-7 text-muted-foreground opacity-60" />
@@ -143,7 +143,8 @@ export default function AdminUsersPage() {
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Loading…</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[580px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
@@ -177,6 +178,7 @@ export default function AdminUsersPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

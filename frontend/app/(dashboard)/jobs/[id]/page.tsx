@@ -148,7 +148,7 @@ export default function JobDetailPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       {}
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 flex-wrap">
         <Button
           variant="ghost"
           size="icon"
@@ -174,7 +174,7 @@ export default function JobDetailPage() {
         </div>
 
         {}
-        <div className="flex gap-1 shrink-0">
+        <div className="flex flex-wrap gap-1 shrink-0">
           {job.status === 'failed' && (
             <Button
               size="sm"

@@ -209,7 +209,7 @@ export default function ExportPage() {
     .join(', ') || 'all products';
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 sm:space-y-6 max-w-2xl w-full">
       <div>
         <h1 className="text-2xl font-bold">Export</h1>
         <p className="text-muted-foreground text-sm">
@@ -225,7 +225,7 @@ export default function ExportPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           {}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2">
             {(Object.entries(FORMAT_META) as [ExportFormat, typeof fmt][]).map(([key, meta]) => {
               const FIcon = meta.icon;
               return (

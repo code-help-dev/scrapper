@@ -139,7 +139,7 @@ export default function SellersPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
@@ -154,13 +154,13 @@ export default function SellersPage() {
             )}
           </p>
         </div>
-        <div className="relative w-64">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search sellers…"
             value={search}
             onChange={handleSearch}
-            className="pl-9 h-9"
+            className="pl-9 h-9 w-full"
           />
         </div>
       </div>

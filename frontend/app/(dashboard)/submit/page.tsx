@@ -70,7 +70,7 @@ export default function SubmitPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 sm:space-y-6 max-w-2xl w-full">
       <div>
         <h1 className="text-2xl font-bold">Submit URLs</h1>
         <p className="text-muted-foreground text-sm">Queue Aajjo supplier or product pages for scraping</p>
