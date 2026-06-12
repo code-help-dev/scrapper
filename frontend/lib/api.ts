@@ -127,7 +127,7 @@ export const exportApi = {
 };
 
 export const sellersApi = {
-  list: (params?: { page?: number; limit?: number; search?: string }) =>
+  list: (params?: { page?: number; limit?: number; search?: string; letter?: string }) =>
     api.get('/sellers', { params }),
   get: (sellerName: string) =>
     api.get(`/sellers/${encodeURIComponent(sellerName)}`),

@@ -18,6 +18,14 @@ import {
   LayoutGrid,
   Package,
   ChevronLeft,
+  MapPin,
+  Building2,
+  Users,
+  Banknote,
+  Scale,
+  Phone,
+  ExternalLink,
+  BadgeCheck,
 } from 'lucide-react';
 import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +37,91 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+
+function SellerInfoCard({ seller }: { seller: Seller }) {
+  const initials = seller.sellerName
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+  const details: { icon: React.ReactNode; label: string; value: string }[] = [
+    seller.businessType
+      ? { icon: <Building2 className="h-3.5 w-3.5" />, label: 'Business', value: seller.businessType }
+      : null,
+    (seller.state || seller.country)
+      ? { icon: <MapPin className="h-3.5 w-3.5" />, label: 'Location', value: [seller.state, seller.country].filter(Boolean).join(', ') }
+      : null,
+    seller.gstNumber
+      ? { icon: <BadgeCheck className="h-3.5 w-3.5" />, label: 'GST', value: seller.gstNumber }
+      : null,
+    seller.legalStatus
+      ? { icon: <Scale className="h-3.5 w-3.5" />, label: 'Legal Status', value: seller.legalStatus }
+      : null,
+    seller.numberOfEmployees
+      ? { icon: <Users className="h-3.5 w-3.5" />, label: 'Employees', value: seller.numberOfEmployees }
+      : null,
+    seller.turnover
+      ? { icon: <Banknote className="h-3.5 w-3.5" />, label: 'Turnover', value: seller.turnover }
+      : null,
+    seller.contactDetails
+      ? { icon: <Phone className="h-3.5 w-3.5" />, label: 'Contact', value: seller.contactDetails }
+      : null,
+    seller.address
+      ? { icon: <MapPin className="h-3.5 w-3.5" />, label: 'Address', value: seller.address }
+      : null,
+  ].filter(Boolean) as { icon: React.ReactNode; label: string; value: string }[];
+
+  return (
+    <div className="rounded-xl border bg-card p-4 flex items-start gap-4">
+      <div className="h-14 w-14 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
+        {seller.sellerLogoUrl ? (
+          <Image
+            src={seller.sellerLogoUrl}
+            alt={seller.sellerName}
+            width={56}
+            height={56}
+            unoptimized
+            className="object-contain"
+          />
+        ) : (
+          <span className="text-lg font-bold text-muted-foreground">{initials}</span>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <h2 className="text-base font-bold leading-tight">
+            {seller.sellerName.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')}
+          </h2>
+          {seller.aajjoProfileUrl && (
+            <a
+              href={seller.aajjoProfileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+            >
+              <ExternalLink className="h-3 w-3" />
+              View Profile
+            </a>
+          )}
+        </div>
+
+        {details.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+            {details.map((d) => (
+              <span key={d.label} className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="text-muted-foreground/60">{d.icon}</span>
+                <span className="font-medium text-foreground/70">{d.label}:</span>
+                <span>{d.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ProductCard({ p }: { p: Product }) {
   const featured = p.images?.find((i) => i.isFeatured) ?? p.images?.[0];
@@ -248,6 +341,9 @@ export default function SellerDetailPage() {
       {}
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
         <div className="p-6 space-y-4">
+          {}
+          {seller && <SellerInfoCard seller={seller} />}
+
           {}
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>

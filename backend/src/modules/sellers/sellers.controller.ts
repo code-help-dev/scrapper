@@ -42,18 +42,22 @@ export class SellersController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'letter', required: false })
   async listSellers(
     @Query('page') page = 1,
-    @Query('limit') limit = 24,
+    @Query('limit') limit = 30,
     @Query('search') search?: string,
+    @Query('letter') letter?: string,
   ) {
     const pageNum = Number(page);
     const limitNum = Math.min(Number(limit), 100);
+    const safeLetter = letter?.trim().slice(0, 1) || undefined;
 
     const { data: sellers, meta } = await this.sellersService.findAll({
       page: pageNum,
       limit: limitNum,
       search,
+      letter: safeLetter,
     });
 
     const sellerNames = sellers.map((s) => (s as any).sellerName as string);
