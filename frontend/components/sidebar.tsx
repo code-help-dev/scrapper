@@ -76,7 +76,7 @@ function NavLinks({
         </Link>
 
         {(session?.user as any)?.role === 'admin' && (
-          <>
+          <div className="hidden">
             <div className="my-2 border-t" />
             {!collapsed && (
               <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -95,7 +95,7 @@ function NavLinks({
                 {!collapsed && label}
               </Link>
             ))}
-          </>
+          </div>
         )}
       </nav>
 
