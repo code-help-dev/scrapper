@@ -13,6 +13,7 @@ import { ImageProcessor } from './processors/image.processor';
 import { ExportProcessor } from './processors/export.processor';
 import { QueueRecoveryService } from './queue-recovery.service';
 import { QueueAdminController } from './queue-admin.controller';
+import { DynamicQueueService } from './dynamic-queue.service';
 import {
   QUEUE_EXTRACTION,
   QUEUE_IMAGE,
@@ -42,7 +43,7 @@ import {
       { name: QUEUE_IMAGE },
       { name: QUEUE_EXPORT },
     ),
-    // Modules whose services are injected into processors
+    
     DatabaseModule,
     ScraperModule,
     ExtractorModule,
@@ -52,7 +53,7 @@ import {
     SellersModule,
   ],
   controllers: [QueueAdminController],
-  providers: [ExtractionProcessor, ImageProcessor, ExportProcessor, QueueRecoveryService],
-  exports: [BullModule],
+  providers: [ExtractionProcessor, ImageProcessor, ExportProcessor, QueueRecoveryService, DynamicQueueService],
+  exports: [BullModule, DynamicQueueService],
 })
 export class QueueModule {}

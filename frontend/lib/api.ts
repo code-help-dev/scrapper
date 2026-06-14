@@ -5,30 +5,52 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
 export const api = axios.create({ baseURL: API_BASE });
 
-// Attach JWT from NextAuth session on every request
+// Shared promise so concurrent requests on the same page all reuse one getSession() call
+// instead of each awaiting it independently. Cleared on 401 so an expired token forces a fresh fetch.
+let sessionPromise: Promise<string | null> | null = null;
+
+function getCachedToken(): Promise<string | null> {
+  if (!sessionPromise) {
+    sessionPromise = getSession().then((s) => s?.accessToken ?? null);
+  }
+  return sessionPromise;
+}
+
+function clearTokenCache() {
+  sessionPromise = null;
+}
+
 api.interceptors.request.use(async (config) => {
-  const session = await getSession();
-  if (session?.accessToken) {
-    config.headers.Authorization = `Bearer ${session.accessToken}`;
+  const token = await getCachedToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// On 401, force a session re-check; if the session error flag is set redirect to login
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     if (error.response?.status === 401) {
+      clearTokenCache();
       const session = await getSession();
       if (!session || (session as any).error === 'RefreshAccessTokenError') {
         await signOut({ redirect: true, callbackUrl: '/login' });
+      }
+    }
+    
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        error.response.data = JSON.parse(text);
+      } catch {
+        
       }
     }
     return Promise.reject(error);
   },
 );
 
-// ── Auth ──────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
@@ -37,7 +59,6 @@ export const authApi = {
   me: () => api.get('/auth/me'),
 };
 
-// ── Jobs ──────────────────────────────────────────────────────────────────
 export const jobsApi = {
   list: (params?: {
     page?: number;
@@ -61,7 +82,6 @@ export const jobsApi = {
   resume: (id: string) => api.post(`/jobs/${id}/resume`),
 };
 
-// ── Products ──────────────────────────────────────────────────────────────
 export const productsApi = {
   list: (params?: {
     page?: number;
@@ -79,16 +99,15 @@ export const productsApi = {
   images: (id: string) => api.get(`/products/${id}/images`),
   delete: (id: string) => api.delete(`/products/${id}`),
   categories: () => api.get('/products/categories'),
-  subcategories: (category: string) =>
-    api.get('/products/subcategories', { params: { category } }),
+  subcategories: (category?: string) =>
+    api.get('/products/subcategories', { params: category ? { category } : undefined }),
 };
-
-// ── Export ────────────────────────────────────────────────────────────────
 
 interface ExportPayload {
   format: string;
   category?: string;
   subCategory?: string;
+  seller?: string;
   dateFrom?: string;
   dateTo?: string;
   status?: string;
@@ -110,25 +129,21 @@ async function triggerBlobDownload(res: { data: Blob; headers: Record<string, st
 }
 
 export const exportApi = {
-  // Async queue-based export (returns job ID, poll for completion)
   trigger: (payload: ExportPayload) => api.post('/export', payload),
   list: () => api.get('/export'),
   status: (id: string) => api.get(`/export/${id}/status`),
-  // Download a previously completed async export
   download: async (id: string) => {
     const res = await api.get(`/export/${id}/download`, { responseType: 'blob' });
     await triggerBlobDownload(res as any);
   },
-  // Direct streaming download — no DB record, no polling needed
   directDownload: async (payload: ExportPayload) => {
     const res = await api.post('/export/direct', payload, { responseType: 'blob' });
     await triggerBlobDownload(res as any);
   },
 };
 
-// ── Sellers ───────────────────────────────────────────────────────────────
 export const sellersApi = {
-  list: (params?: { page?: number; limit?: number; search?: string }) =>
+  list: (params?: { page?: number; limit?: number; search?: string; letter?: string }) =>
     api.get('/sellers', { params }),
   get: (sellerName: string) =>
     api.get(`/sellers/${encodeURIComponent(sellerName)}`),
@@ -151,7 +166,6 @@ export const sellersApi = {
   ) => api.get(`/sellers/${encodeURIComponent(sellerName)}/products`, { params }),
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────
 export const dashboardApi = {
   stats: () => api.get('/dashboard/stats'),
   jobs: () => api.get('/dashboard/jobs'),
@@ -159,7 +173,16 @@ export const dashboardApi = {
   exports: () => api.get('/dashboard/exports'),
 };
 
-// ── Health ────────────────────────────────────────────────────────────────
 export const healthApi = {
   check: () => api.get('/health'),
+};
+
+export const adminApi = {
+  listUsers: () => api.get('/admin/users'),
+  createUser: (email: string, password: string, role: string) =>
+    api.post('/admin/users', { email, password, role }),
+  updateUser: (id: string, updates: { role?: string; active?: boolean }) =>
+    api.patch(`/admin/users/${id}`, updates),
+  getOverview: () => api.get('/admin/overview'),
+  getUserJobCounts: (id: string) => api.get(`/admin/users/${id}/jobs`),
 };

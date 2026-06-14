@@ -80,7 +80,7 @@ export default function JobDetailPage() {
   const { data: job, isLoading, error } = useQuery<JobDetail>({
     queryKey: ['job', id],
     queryFn: () => jobsApi.get(id).then((r) => r.data),
-    // Auto-poll every 2s while active
+    
     refetchInterval: (query) => {
       const status = query.state.data?.status as JobStatus | undefined;
       return status && ACTIVE_STATUSES.includes(status) ? 2000 : false;
@@ -147,8 +147,8 @@ export default function JobDetailPage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      {/* Back + Header */}
-      <div className="flex items-start gap-3">
+      {}
+      <div className="flex items-start gap-3 flex-wrap">
         <Button
           variant="ghost"
           size="icon"
@@ -173,8 +173,8 @@ export default function JobDetailPage() {
           <p className="text-xs text-muted-foreground font-mono mt-1 truncate">{id}</p>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-1 shrink-0">
+        {}
+        <div className="flex flex-wrap gap-1 shrink-0">
           {job.status === 'failed' && (
             <Button
               size="sm"
@@ -222,7 +222,7 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Job Info */}
+      {}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -255,7 +255,7 @@ export default function JobDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Progress (only for batch/discovery jobs) */}
+      {}
       {total > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -264,7 +264,7 @@ export default function JobDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Progress bar */}
+            {}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="font-medium">{processed + failed} of {total} processed</span>
@@ -280,7 +280,7 @@ export default function JobDetailPage() {
               </div>
             </div>
 
-            {/* Stat grid */}
+            {}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <StatBox label="Total" value={total} />
               <StatBox
@@ -296,7 +296,7 @@ export default function JobDetailPage() {
               <StatBox label="Remaining" value={remaining} color="text-muted-foreground" />
             </div>
 
-            {/* Live indicator */}
+            {}
             {isActive && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="relative flex h-2 w-2">
@@ -310,7 +310,7 @@ export default function JobDetailPage() {
         </Card>
       )}
 
-      {/* Timeline */}
+      {}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -326,7 +326,7 @@ export default function JobDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Error */}
+      {}
       {job.errorMessage && (
         <Card className="border-destructive/30">
           <CardHeader className="pb-2">
@@ -342,7 +342,7 @@ export default function JobDetailPage() {
         </Card>
       )}
 
-      {/* Products scraped */}
+      {}
       {job.status === 'completed' && job.productIds?.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -362,7 +362,7 @@ export default function JobDetailPage() {
         </Card>
       )}
 
-      {/* Footer timestamps */}
+      {}
       <div className="text-xs text-muted-foreground text-right pb-4">
         <Clock className="inline h-3 w-3 mr-1" />
         Submitted {format(new Date(job.createdAt), 'PPpp')}

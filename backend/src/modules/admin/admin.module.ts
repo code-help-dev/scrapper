@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { QueueModule } from '../queue/queue.module';
-import { JobsController } from './jobs.controller';
+import { AdminController } from './admin.controller';
+import { AdminService } from './admin.service';
 
 @Module({
   imports: [DatabaseModule, QueueModule],
-  controllers: [JobsController],
+  controllers: [AdminController],
+  providers: [AdminService],
 })
-export class JobsModule {}
+export class AdminModule {}

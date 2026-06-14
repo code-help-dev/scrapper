@@ -33,7 +33,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class UrlInputController {
   constructor(private readonly urlInputService: UrlInputService) {}
 
-  // ── POST /api/jobs  — single URL ──────────────────────────────────────────
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Submit a single Aajjo URL for scraping' })
@@ -51,7 +50,6 @@ export class UrlInputController {
     };
   }
 
-  // ── POST /api/jobs/bulk  — CSV upload ─────────────────────────────────────
   @Post('bulk')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
@@ -73,7 +71,7 @@ export class UrlInputController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 }), // 2 MB
+          new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 }), 
           new FileTypeValidator({ fileType: /(text\/csv|text\/plain|application\/octet-stream)/, skipMagicNumbersValidation: true }),
         ],
       }),

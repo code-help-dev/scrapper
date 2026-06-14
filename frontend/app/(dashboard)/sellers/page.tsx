@@ -11,8 +11,39 @@ import { Input } from '@/components/ui/input';
 import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/lib/hooks/use-debounce';
+import { cn } from '@/lib/utils';
 
-function SellerCard({ seller }: { seller: Seller }) {
+const ALPHABET = ['All', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
+
+function AlphabetBar({
+  selected,
+  onSelect,
+}: {
+  selected: string;
+  onSelect: (letter: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-0.5">
+      {ALPHABET.map((l) => (
+        <button
+          key={l}
+          onClick={() => onSelect(l === selected ? '' : l)}
+          className={cn(
+            'h-7 rounded text-xs font-medium transition-colors px-2',
+            l === 'All' ? 'min-w-[2.5rem]' : 'w-7',
+            selected === l
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
+          )}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SellerRow({ seller }: { seller: Seller }) {
   const initials = seller.sellerName
     .split(' ')
     .slice(0, 2)
@@ -22,50 +53,47 @@ function SellerCard({ seller }: { seller: Seller }) {
   return (
     <Link
       href={`/sellers/${encodeURIComponent(seller.sellerName)}`}
-      className="group flex flex-col gap-3 rounded-xl border bg-card p-4 transition hover:shadow-md hover:border-primary/40"
+      className="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 transition hover:border-primary/40 hover:bg-muted/30"
     >
-      {/* Logo / Avatar */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="h-12 w-12 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
-          {seller.sellerLogoUrl ? (
-            <Image
-              src={seller.sellerLogoUrl}
-              alt={seller.sellerName}
-              width={48}
-              height={48}
-              unoptimized
-              className="object-contain"
-            />
-          ) : (
-            <span className="text-sm font-bold text-muted-foreground">{initials}</span>
-          )}
-        </div>
-        <Badge variant="secondary" className="text-[10px] shrink-0">
-          <Package className="h-2.5 w-2.5 mr-1" />
-          {seller.productCount.toLocaleString()} products
-        </Badge>
-      </div>
-
-      {/* Name */}
-      <div>
-        <h3 className="font-semibold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2">
-          {seller.sellerName}
-        </h3>
-        {seller.businessType && (
-          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-            <Building2 className="h-3 w-3" />
-            {seller.businessType}
-          </p>
+      <div className="h-9 w-9 rounded-md border bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
+        {seller.sellerLogoUrl ? (
+          <Image
+            src={seller.sellerLogoUrl}
+            alt={seller.sellerName}
+            width={36}
+            height={36}
+            unoptimized
+            className="object-contain"
+          />
+        ) : (
+          <span className="text-xs font-bold text-muted-foreground">{initials}</span>
         )}
       </div>
 
-      {/* Location */}
-      {(seller.state || seller.country) && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <MapPin className="h-3 w-3 shrink-0" />
-          {[seller.state, seller.country].filter(Boolean).join(', ')}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+          {seller.sellerName}
         </p>
-      )}
+        <div className="flex items-center gap-2 mt-0.5">
+          {seller.businessType && (
+            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 truncate">
+              <Building2 className="h-3 w-3 shrink-0" />
+              {seller.businessType}
+            </span>
+          )}
+          {(seller.state || seller.country) && (
+            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 truncate">
+              <MapPin className="h-3 w-3 shrink-0" />
+              {[seller.state, seller.country].filter(Boolean).join(', ')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <Badge variant="secondary" className="text-[10px] shrink-0">
+        <Package className="h-2.5 w-2.5 mr-1" />
+        {seller.productCount.toLocaleString()}
+      </Badge>
     </Link>
   );
 }
@@ -74,13 +102,21 @@ export default function SellersPage() {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
+  const [selectedLetter, setSelectedLetter] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Seller>>({
-    queryKey: ['sellers', page, debouncedSearch],
+    queryKey: ['sellers', page, debouncedSearch, selectedLetter],
     queryFn: () =>
       sellersApi
-        .list({ page, limit: 24, search: debouncedSearch || undefined })
+        .list({
+          page,
+          limit: 30,
+          search: debouncedSearch || undefined,
+          letter: selectedLetter && selectedLetter !== 'All'
+            ? selectedLetter
+            : undefined,
+        })
         .then((r) => r.data),
   });
 
@@ -90,13 +126,20 @@ export default function SellersPage() {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
+    setSelectedLetter('');
+    setPage(1);
+  };
+
+  const handleLetterSelect = (letter: string) => {
+    setSelectedLetter(letter);
+    setSearch('');
     setPage(1);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
@@ -104,43 +147,55 @@ export default function SellersPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             {isLoading ? 'Loading…' : `${total.toLocaleString()} sellers`}
+            {selectedLetter && selectedLetter !== 'All' && !isLoading && (
+              <span className="ml-1 text-xs">
+                — starting with <span className="font-semibold text-foreground">{selectedLetter}</span>
+              </span>
+            )}
           </p>
         </div>
-        <div className="relative w-64">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search sellers…"
             value={search}
             onChange={handleSearch}
-            className="pl-9 h-9"
+            className="pl-9 h-9 w-full"
           />
         </div>
       </div>
 
-      {/* Loading skeleton */}
+      {/* Alphabet bar */}
+      <AlphabetBar selected={selectedLetter} onSelect={handleLetterSelect} />
+
+      {/* Skeleton */}
       {isLoading && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-xl border bg-muted/40" />
+            <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty */}
       {!isLoading && sellers.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-24 text-center">
           <Users className="h-12 w-12 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            {search ? `No sellers matching "${search}"` : 'No sellers found yet — scrape some seller pages first'}
+            {search
+              ? `No sellers matching "${search}"`
+              : selectedLetter && selectedLetter !== 'All'
+                ? `No sellers starting with "${selectedLetter}"`
+                : 'No sellers found yet — scrape some seller pages first'}
           </p>
         </div>
       )}
 
       {/* Grid */}
       {!isLoading && sellers.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {sellers.map((s) => (
-            <SellerCard key={s.sellerName} seller={s} />
+            <SellerRow key={s.sellerName} seller={s} />
           ))}
         </div>
       )}

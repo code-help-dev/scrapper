@@ -1,24 +1,20 @@
 import {
   Injectable,
   BadRequestException,
-  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { InjectQueue } from '@nestjs/bullmq';
 import { Model, Types } from 'mongoose';
-import { Queue } from 'bullmq';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 import {
   ExtractionJob,
   ExtractionJobDocument,
 } from '../database/schemas/extraction-job.schema';
 import { JobStatus, JobType } from '../../common/enums/job-status.enum';
-import { QUEUE_EXTRACTION, JOB_SCRAPE_URL } from '../queue/queue.constants';
 import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
+import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
 const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\//i;
-// Individual product pages always have /product/ in the path on aajjo.com
 const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
 const MAX_BULK = 500;
 
@@ -31,11 +27,8 @@ export class UrlInputService {
     private readonly productModel: Model<ProductDocument>,
     @InjectModel(ExtractionJob.name)
     private readonly jobModel: Model<ExtractionJobDocument>,
-    @InjectQueue(QUEUE_EXTRACTION)
-    private readonly extractionQueue: Queue,
+    private readonly dynamicQueueService: DynamicQueueService,
   ) {}
-
-  // ── Validation ────────────────────────────────────────────────────────────
 
   validateAajjoUrl(url: string): void {
     if (!AAJJO_DOMAIN_RE.test(url)) {
@@ -45,31 +38,23 @@ export class UrlInputService {
     }
   }
 
-  // B2 fix: detect whether URL is a single product page or a category/listing page
   isProductUrl(url: string): boolean {
     return AAJJO_PRODUCT_RE.test(url);
   }
 
-  // B7 fix: check ExtractionJob collection for pending/processing jobs on same URL
-  // (was checking Product — if a job failed before creating a product, URL couldn't be resubmitted)
-  async checkDuplicate(url: string): Promise<void> {
+  async checkDuplicate(url: string): Promise<{ isDuplicate: boolean; reason?: string }> {
     const activeJob = await this.jobModel
       .exists({ sourceUrl: url, status: { $in: ['queued', 'processing'] } })
       .exec();
     if (activeJob) {
-      throw new ConflictException(
-        `This URL already has an active job in the queue: ${url}`,
-      );
+      return { isDuplicate: true, reason: `URL already has an active job in the queue` };
     }
     const completed = await this.productModel.exists({ sourceUrl: url }).exec();
     if (completed) {
-      throw new ConflictException(
-        `This URL has already been successfully scraped: ${url}`,
-      );
+      return { isDuplicate: true, reason: `URL already processed — product exists in the catalog` };
     }
+    return { isDuplicate: false };
   }
-
-  // ── Enqueue a single known product URL ───────────────────────────────────
 
   async enqueueProductUrl(
     url: string,
@@ -84,25 +69,22 @@ export class UrlInputService {
     });
     await job.save();
 
-    await this.extractionQueue.add(
-      JOB_SCRAPE_URL,
-      { jobId: job.id, sourceUrl: url, userId } satisfies ScrapeUrlPayload,
-      { jobId: job.id },
-    );
+    await this.dynamicQueueService.addJob(userId, {
+      jobId: job.id,
+      sourceUrl: url,
+      userId,
+    } satisfies ScrapeUrlPayload);
 
     return job;
   }
-
-  // ── Single URL submission (handles both product + category pages) ─────────
 
   async submitSingle(
     url: string,
     userId: string,
     label?: string,
-  ): Promise<{ job?: ExtractionJobDocument; discoveryJob?: ExtractionJobDocument; type: 'product' | 'category'; message: string }> {
+  ): Promise<{ job?: ExtractionJobDocument; discoveryJob?: ExtractionJobDocument; type: 'product' | 'category'; skipped?: boolean; message: string }> {
     this.validateAajjoUrl(url);
 
-    // B2 fix: if it's a category/listing page, queue a discovery job
     if (!this.isProductUrl(url)) {
       this.logger.log(`Category URL detected — queueing discovery job: ${url}`);
 
@@ -114,11 +96,12 @@ export class UrlInputService {
       });
       await discoveryJob.save();
 
-      await this.extractionQueue.add(
-        JOB_SCRAPE_URL,
-        { jobId: discoveryJob.id, sourceUrl: url, userId, isDiscovery: true } as ScrapeUrlPayload & { isDiscovery: boolean },
-        { jobId: discoveryJob.id },
-      );
+      await this.dynamicQueueService.addJob(userId, {
+        jobId: discoveryJob.id,
+        sourceUrl: url,
+        userId,
+        isDiscovery: true,
+      } satisfies ScrapeUrlPayload);
 
       return {
         discoveryJob,
@@ -127,8 +110,16 @@ export class UrlInputService {
       };
     }
 
-    // Direct product URL
-    await this.checkDuplicate(url);
+    const duplicate = await this.checkDuplicate(url);
+    if (duplicate.isDuplicate) {
+      this.logger.log(`Skipping duplicate URL: ${url} — ${duplicate.reason}`);
+      return {
+        type: 'product',
+        skipped: true,
+        message: duplicate.reason!,
+      };
+    }
+
     const job = await this.enqueueProductUrl(url, userId);
     this.logger.log(`Product job queued [${job.id}] → ${url}`);
 
@@ -139,8 +130,6 @@ export class UrlInputService {
     };
   }
 
-  // ── CSV buffer parser ─────────────────────────────────────────────────────
-
   parseCsvBuffer(buffer: Buffer): string[] {
     return buffer
       .toString('utf-8')
@@ -148,8 +137,6 @@ export class UrlInputService {
       .map((line) => line.trim().split(',')[0].trim())
       .filter((line) => line.length > 0 && !line.startsWith('#'));
   }
-
-  // ── Bulk URL submission ───────────────────────────────────────────────────
 
   async submitBulk(
     urls: string[],
@@ -172,9 +159,7 @@ export class UrlInputService {
         this.validateAajjoUrl(url);
 
         if (!this.isProductUrl(url)) {
-          // Category/listing page — only block if there is already an active job for this URL.
-          // Do NOT check productModel: category URLs are never saved as products so the check
-          // would only block if the old code incorrectly created a product record for this URL.
+          
           const activeJob = await this.jobModel
             .exists({ sourceUrl: url, status: { $in: ['queued', 'processing'] } })
             .exec();
@@ -190,16 +175,21 @@ export class UrlInputService {
             submittedBy: new Types.ObjectId(userId),
           });
           await discoveryJob.save();
-          await this.extractionQueue.add(
-            JOB_SCRAPE_URL,
-            { jobId: discoveryJob.id, sourceUrl: url, userId, isDiscovery: true } satisfies ScrapeUrlPayload,
-            { jobId: discoveryJob.id },
-          );
+          await this.dynamicQueueService.addJob(userId, {
+            jobId: discoveryJob.id,
+            sourceUrl: url,
+            userId,
+            isDiscovery: true,
+          } satisfies ScrapeUrlPayload);
           queued.push(discoveryJob);
           continue;
         }
 
-        await this.checkDuplicate(url);
+        const duplicate = await this.checkDuplicate(url);
+        if (duplicate.isDuplicate) {
+          skipped.push({ url, reason: duplicate.reason! });
+          continue;
+        }
         const job = await this.enqueueProductUrl(url, userId, JobType.BULK);
         queued.push(job);
       } catch (err: any) {

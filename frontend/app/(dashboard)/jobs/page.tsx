@@ -155,19 +155,19 @@ export default function JobsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex gap-1">
-            <div className="relative">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          {}
+          <form onSubmit={handleSearch} className="flex gap-1 flex-1 sm:flex-none">
+            <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search by URL…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-8 h-8 w-52 text-sm"
+                className="pl-8 h-8 w-full sm:w-52 text-sm"
               />
             </div>
-            <Button type="submit" size="sm" variant="outline" className="h-8">
+            <Button type="submit" size="sm" variant="outline" className="h-8 shrink-0">
               Search
             </Button>
             {search && (
@@ -175,7 +175,7 @@ export default function JobsPage() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8"
+                className="h-8 shrink-0"
                 onClick={() => {
                   setSearch('');
                   setSearchInput('');
@@ -187,9 +187,9 @@ export default function JobsPage() {
             )}
           </form>
 
-          {/* Status filter */}
+          {}
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-36 h-8">
+            <SelectTrigger className="w-full sm:w-36 h-8">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -267,7 +267,7 @@ export default function JobsPage() {
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1">
-                        {/* Retry: failed or re-scrape completed */}
+                        {}
                         {(job.status === 'failed' || job.status === 'completed') && (
                           <Button
                             size="icon"
@@ -279,7 +279,7 @@ export default function JobsPage() {
                             <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {/* Pause: queued only */}
+                        {}
                         {job.status === 'queued' && (
                           <Button
                             size="icon"
@@ -291,7 +291,7 @@ export default function JobsPage() {
                             <Pause className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {/* Resume: paused only */}
+                        {}
                         {job.status === 'paused' && (
                           <Button
                             size="icon"
@@ -303,7 +303,7 @@ export default function JobsPage() {
                             <Play className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {/* Cancel: queued, paused, or processing (stuck) */}
+                        {}
                         {(job.status === 'queued' || job.status === 'paused' || job.status === 'processing') && (
                           <Button
                             size="icon"
@@ -323,7 +323,7 @@ export default function JobsPage() {
             </table>
           </div>
 
-          {/* Pagination */}
+          {}
           {data && data.meta.pages > 1 && (
             <SmartPagination
               currentPage={page}

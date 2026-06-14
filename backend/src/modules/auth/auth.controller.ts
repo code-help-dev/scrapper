@@ -40,7 +40,7 @@ export class AuthController {
     summary: 'Register user — free for first user; admin-only after that',
   })
   async register(@Body() dto: RegisterDto, @Request() req: any) {
-    // req.user is populated only if a valid JWT was sent; optional here
+    
     const role = req.user?.role;
     const user = await this.authService.register(dto, role);
     return { id: user.id, email: user.email, role: user.role };

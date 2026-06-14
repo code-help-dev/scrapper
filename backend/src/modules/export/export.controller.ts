@@ -7,6 +7,7 @@ import {
   Res,
   UseGuards,
   NotFoundException,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import { IsEnum, IsOptional, IsString, IsDateString, IsArray } from 'class-valid
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { ExportJob, ExportJobDocument } from '../database/schemas/export-job.schema';
 import { ExportFormat, ExportStatus } from '../../common/enums/export-format.enum';
 import { ExportService } from './export.service';
@@ -40,12 +42,11 @@ class TriggerExportDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() category?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() subCategory?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() seller?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateFrom?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateTo?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
 
-  // Explicit product selection — when present, exports exactly these products
-  // (other filters are ignored). Empty/absent → filter-based export.
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -66,8 +67,6 @@ export class ExportController {
     private readonly exportService: ExportService,
   ) {}
 
-  // ── POST /api/export — trigger export job ────────────────────────────────
-
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Trigger an export — returns export job ID' })
@@ -79,6 +78,7 @@ export class ExportController {
     const filters = {
       category: dto.category,
       subCategory: dto.subCategory,
+      seller: dto.seller,
       dateFrom: dto.dateFrom ? new Date(dto.dateFrom) : undefined,
       dateTo: dto.dateTo ? new Date(dto.dateTo) : undefined,
       status: dto.status,
@@ -111,13 +111,12 @@ export class ExportController {
     };
   }
 
-  // ── GET /api/export — export history ─────────────────────────────────────
-
   @Get()
   @ApiOperation({ summary: 'Export job history' })
-  async findAll(@CurrentUser() user: { id: string }) {
+  async findAll(@CurrentUser() user: { id: string; role: string }) {
+    const filter = user.role === UserRole.ADMIN ? {} : { generatedBy: new Types.ObjectId(user.id) };
     const jobs = await this.exportJobModel
-      .find()
+      .find(filter)
       .sort({ createdAt: -1 })
       .limit(50)
       .lean()
@@ -125,13 +124,17 @@ export class ExportController {
     return { data: jobs };
   }
 
-  // ── GET /api/export/:id/status ────────────────────────────────────────────
-
   @Get(':id/status')
   @ApiOperation({ summary: 'Poll export job status' })
-  async status(@Param('id') id: string) {
+  async status(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
     const job = await this.exportJobModel.findById(id).lean().exec();
     if (!job) throw new NotFoundException('Export job not found');
+    if (user.role !== UserRole.ADMIN && job.generatedBy?.toString() !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
     return {
       exportJobId: id,
       status: job.status,
@@ -142,11 +145,19 @@ export class ExportController {
     };
   }
 
-  // ── GET /api/export/:id/download ──────────────────────────────────────────
-
   @Get(':id/download')
   @ApiOperation({ summary: 'Download the completed export file' })
-  async download(@Param('id') id: string, @Res() res: Response) {
+  async download(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+    @Res() res: Response,
+  ) {
+    const job = await this.exportJobModel.findById(id).lean().exec();
+    if (!job) throw new NotFoundException('Export job not found');
+    if (user.role !== UserRole.ADMIN && job.generatedBy?.toString() !== user.id) {
+      throw new ForbiddenException('Access denied');
+    }
+
     const filePath = await this.exportService.getExportFilePath(id);
     const fileName = path.basename(filePath);
 
@@ -156,8 +167,6 @@ export class ExportController {
     const stream = fs.createReadStream(filePath);
     stream.pipe(res);
   }
-
-  // ── POST /api/export/direct — generate & stream immediately, no DB record ──
 
   @Post('direct')
   @HttpCode(HttpStatus.OK)
@@ -170,6 +179,7 @@ export class ExportController {
     const filters = {
       category: dto.category,
       subCategory: dto.subCategory,
+      seller: dto.seller,
       dateFrom: dto.dateFrom ? new Date(dto.dateFrom) : undefined,
       dateTo: dto.dateTo ? new Date(dto.dateTo) : undefined,
       status: dto.status,

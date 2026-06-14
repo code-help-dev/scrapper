@@ -1,4 +1,4 @@
-// ── Auth ──────────────────────────────────────────────────────────────────
+
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
 export interface AuthUser {
@@ -7,7 +7,6 @@ export interface AuthUser {
   role: UserRole;
 }
 
-// ── Jobs ──────────────────────────────────────────────────────────────────
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'retry' | 'paused';
 export type JobType = 'single' | 'bulk' | 'discovery';
 
@@ -32,7 +31,6 @@ export interface ExtractionJob {
   bullState?: string;
 }
 
-// ── Products ──────────────────────────────────────────────────────────────
 export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface SpecItem {
@@ -96,7 +94,6 @@ export interface Product {
   updatedAt: string;
 }
 
-// ── Product Hierarchy ─────────────────────────────────────────────────────
 export interface CategoryInfo {
   name: string;
   productCount: number;
@@ -107,7 +104,6 @@ export interface SubcategoryInfo {
   productCount: number;
 }
 
-// ── Sellers ───────────────────────────────────────────────────────────────
 export interface Seller {
   sellerName: string;
   sellerLogoUrl: string;
@@ -125,7 +121,6 @@ export interface Seller {
   aajjoProfileUrl?: string;
 }
 
-// ── Export ────────────────────────────────────────────────────────────────
 export type ExportFormat = 'csv' | 'xlsx' | 'json' | 'shopify_csv' | 'woocommerce_xml';
 export type ExportStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -141,7 +136,6 @@ export interface ExportJob {
   createdAt: string;
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────
 export interface DashboardStats {
   products: {
     total: number;
@@ -160,7 +154,6 @@ export interface DashboardStats {
   categoryBreakdown: { category: string; count: number }[];
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -168,5 +161,30 @@ export interface PaginatedResponse<T> {
     page: number;
     limit: number;
     pages: number;
+  };
+}
+
+export interface AdminUser {
+  _id: string;
+  email: string;
+  role: UserRole;
+  lastLoginAt: string | null;
+  createdAt: string;
+  jobCount: number;
+  _r?: boolean;
+}
+
+export interface AdminOverviewRow {
+  userId: string;
+  email: string;
+  role: UserRole;
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+  queue: {
+    waiting: number;
+    active: number;
+    delayed: number;
   };
 }

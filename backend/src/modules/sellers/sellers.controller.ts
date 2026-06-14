@@ -37,27 +37,29 @@ export class SellersController {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  // ── GET /api/sellers ──────────────────────────────────────────────────────
   @Get()
   @ApiOperation({ summary: 'List sellers from the dedicated sellers collection' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'letter', required: false })
   async listSellers(
     @Query('page') page = 1,
-    @Query('limit') limit = 24,
+    @Query('limit') limit = 30,
     @Query('search') search?: string,
+    @Query('letter') letter?: string,
   ) {
     const pageNum = Number(page);
     const limitNum = Math.min(Number(limit), 100);
+    const safeLetter = letter?.trim().slice(0, 1) || undefined;
 
     const { data: sellers, meta } = await this.sellersService.findAll({
       page: pageNum,
       limit: limitNum,
       search,
+      letter: safeLetter,
     });
 
-    // Attach live product count from the Product collection
     const sellerNames = sellers.map((s) => (s as any).sellerName as string);
     const counts = sellerNames.length
       ? await this.productModel.aggregate([
@@ -78,7 +80,6 @@ export class SellersController {
     return { data, meta };
   }
 
-  // ── GET /api/sellers/:sellerName/categories ───────────────────────────────
   @Get(':sellerName/categories')
   @ApiOperation({ summary: 'Get categories for a specific seller' })
   async getSellerCategories(@Param('sellerName') sellerName: string) {
@@ -102,7 +103,6 @@ export class SellersController {
     return result;
   }
 
-  // ── GET /api/sellers/:sellerName/subcategories?category=X ─────────────────
   @Get(':sellerName/subcategories')
   @ApiOperation({ summary: 'Get subcategories for a seller within a category' })
   @ApiQuery({ name: 'category', required: true })
@@ -126,7 +126,6 @@ export class SellersController {
     ]);
   }
 
-  // ── GET /api/sellers/:sellerName/products ─────────────────────────────────
   @Get(':sellerName/products')
   @ApiOperation({ summary: "Get a seller's products with optional filters" })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -182,7 +181,6 @@ export class SellersController {
     };
   }
 
-  // ── GET /api/sellers/:sellerName ──────────────────────────────────────────
   @Get(':sellerName')
   @ApiOperation({ summary: 'Get seller detail from the sellers collection' })
   async getSeller(@Param('sellerName') sellerName: string) {

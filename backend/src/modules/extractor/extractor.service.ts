@@ -52,8 +52,6 @@ export interface ExtractedProduct {
 export class ExtractorService {
   private readonly logger = new Logger(ExtractorService.name);
 
-  // ── Multi-selector text helper ────────────────────────────────────────────
-
   private async trySelectors(
     page: Page,
     selectors: string[],
@@ -75,9 +73,6 @@ export class ExtractorService {
     return { value: '', confidence: 0 };
   }
 
-  // ── Price parsing ─────────────────────────────────────────────────────────
-  // Aajjo price text: "₹ 29,500 \n Get Latest Price"
-
   private parsePrice(raw: string): { price: number | null; currency: string } {
     const currencyMap: Record<string, string> = { '₹': 'INR', '$': 'USD', '€': 'EUR' };
     let currency = 'INR';
@@ -89,8 +84,6 @@ export class ExtractorService {
     return { price, currency };
   }
 
-  // ── MOQ: text search in full page text ───────────────────────────────────
-
   private async extractMoq(page: Page): Promise<number | null> {
     try {
       const text = await page.evaluate(() => document.body.innerText);
@@ -99,21 +92,12 @@ export class ExtractorService {
         const n = parseFloat(match[1].replace(/,/g, ''));
         return isNaN(n) ? null : n;
       }
-    } catch { /* ignore */ }
+    } catch {  }
     return null;
   }
 
-  // ── Navigate Aajjo product page tabs before extraction ───────────────────
-  // Aajjo renders Specification, Description, and CompanyDetails behind
-  // click-activated anchor-hash tabs. Clicking each ensures the content is
-  // fully in the DOM before we read it.
-
   private async navigateProductTabs(page: Page): Promise<void> {
-    // Aajjo product pages use anchor-hash tabs (#Specification, #Description,
-    // #CompanyDetails). Clicking them does NOT lazy-load content — all data is
-    // already in the DOM after domcontentloaded. We click each tab only to
-    // ensure any CSS-hidden tab-pane becomes visible before we read innerText.
-    // No waitForFunction needed; a short settle is enough.
+    
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
     const clickTab = async (selector: string): Promise<boolean> => {
@@ -121,38 +105,31 @@ export class ExtractorService {
         const el = await page.$(selector);
         if (!el) return false;
         await el.click();
-        await sleep(150); // minimal settle — no navigation triggered
+        await sleep(150); 
         return true;
       } catch {
         return false;
       }
     };
 
-    // Click Specification tab (try both naming variants)
     if (!await clickTab('a[href="#Specification"]')) {
       await clickTab('a[href="#TechnicalSpecification"]') ||
         await clickTab('[data-toggle="tab"][href*="Spec"]') ||
         await clickTab('[data-bs-toggle="tab"][href*="Spec"]');
     }
 
-    // Click Description tab
     if (!await clickTab('a[href="#Description"]')) {
       await clickTab('a[href="#ProductDescription"]') ||
         await clickTab('[data-toggle="tab"][href*="Description"]') ||
         await clickTab('[data-bs-toggle="tab"][href*="Description"]');
     }
 
-    // Click Company Details tab
     if (!await clickTab('a[href="#CompanyDetails"]')) {
       await clickTab('a[href="#SellerDetails"]') ||
         await clickTab('[data-toggle="tab"][href*="Company"]') ||
         await clickTab('[data-bs-toggle="tab"][href*="Company"]');
     }
   }
-
-  // ── Expand hidden specs — click "More Specifications" before reading ────────
-  // Aajjo product pages sometimes hide additional spec rows behind a toggle
-  // link. We click it (if present) so all rows are in the DOM before we query.
 
   private async expandSpecifications(page: Page): Promise<void> {
     try {
@@ -181,7 +158,7 @@ export class ExtractorService {
       });
 
       if (clicked) {
-        // Wait briefly for DOM updates / any CSS transition
+        
         await page.waitForFunction(() => document.readyState === 'complete', { timeout: 5000 }).catch(() => {});
         await new Promise<void>((r) => setTimeout(r, 1200));
         this.logger.debug('expandSpecifications: clicked More Specifications');
@@ -190,13 +167,6 @@ export class ExtractorService {
       this.logger.debug(`expandSpecifications: ${e.message}`);
     }
   }
-
-  // ── Breadcrumb — multi-strategy to handle Aajjo's actual DOM structure ─────
-  // Strategy 0: JSON-LD BreadcrumbList (most reliable — structured data)
-  // Strategy 1: standard ol.breadcrumb or ul.breadcrumb with <li> items
-  // Strategy 2: any element with class/id containing "breadcrumb" + <a> children
-  // Strategy 3: links that appear before <h1> whose href is a short category path
-  //             (/cutting-machines) or sub-category path (/cutting-machines/coconut-scraper)
 
   private async extractBreadcrumb(page: Page): Promise<{ category: string; subCategory: string }> {
     try {
@@ -207,8 +177,7 @@ export class ExtractorService {
         const isCategoryHref = (href: string): boolean => {
           try {
             const url = new URL(href);
-            // Accept any *.aajjo.com host — product pages are on seller subdomains
-            // (e.g. shop1.aajjo.com) while breadcrumb links go to www.aajjo.com
+            
             if (!url.hostname.endsWith('aajjo.com')) return false;
             const parts = url.pathname.split('/').filter(Boolean);
             const skip = ['product', 'ahata', 'login', 'register', 'contact', 'about', 'search', 'sitemap'];
@@ -216,9 +185,6 @@ export class ExtractorService {
           } catch { return false; }
         };
 
-        // Strategy 0: JSON-LD BreadcrumbList — most structured, highest priority
-        // Aajjo sometimes encodes names as HTML entities inside JSON-LD (e.g. &amp;),
-        // so we decode via textarea before returning.
         const decodeHtml = (str: string): string => {
           if (!str.includes('&')) return str;
           const ta = document.createElement('textarea');
@@ -240,22 +206,21 @@ export class ExtractorService {
                 }
               }
             }
-          } catch { /* malformed JSON-LD, skip */ }
+          } catch {  }
         }
 
-        // Strategy 1: explicit <ol class="breadcrumb"> or <ul class="breadcrumb">
         const listBreadcrumb = document.querySelector(
           'ol.breadcrumb, ul.breadcrumb, nav[aria-label*="breadcrumb" i], [role="navigation"][class*="breadcrumb"]',
         );
         if (listBreadcrumb) {
-          // Prefer links (skip "Home" and current page / active item)
+          
           const links = Array.from(listBreadcrumb.querySelectorAll('a')).filter(
             (a) => a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim(),
           );
           if (links.length >= 1) {
             return { category: clean(links[0]), subCategory: links[1] ? clean(links[1]) : '' };
           }
-          // No links — fall back to li text, skip "Home" and active/current item
+          
           const items = Array.from(listBreadcrumb.querySelectorAll('li'))
             .map((li) => li.textContent?.replace(/\s+/g, ' ').trim() ?? '')
             .filter((t) => t && t.toLowerCase() !== 'home');
@@ -264,7 +229,6 @@ export class ExtractorService {
           }
         }
 
-        // Strategy 2: any element whose class/id contains "breadcrumb"
         const candidates = Array.from(
           document.querySelectorAll('[class*="breadcrumb"], [id*="breadcrumb"]'),
         );
@@ -285,13 +249,11 @@ export class ExtractorService {
           }
         }
 
-        // Strategy 3: any small container (nav/div/p) containing » separator AND same-domain
-        // category links — handles Aajjo breadcrumbs that don't use a "breadcrumb" class/id.
         const containers = Array.from(document.querySelectorAll('nav, div, p, span')) as HTMLElement[];
         for (const el of containers) {
           const text = el.textContent ?? '';
           if (!text.includes('»') && !text.includes('›')) continue;
-          // Skip large structural sections (body, sidebars, product listings)
+          
           if (el.children.length > 15 || el.querySelectorAll('table, form, ul, ol').length > 0) continue;
           const catLinks = (Array.from(el.querySelectorAll('a[href]')) as HTMLAnchorElement[])
             .filter((a) => isCategoryHref(a.href) && a.textContent?.trim().toLowerCase() !== 'home' && a.textContent?.trim());
@@ -304,14 +266,12 @@ export class ExtractorService {
           }
         }
 
-        // Strategy 4: broadest fallback — any same-domain category link in the top
-        // portion of the page (avoids footer nav pollution).
         const pageHeight = document.body.scrollHeight || 2000;
         const allLinks = (Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[])
           .filter((a) => {
             if (a.textContent?.trim().toLowerCase() === 'home' || !a.textContent?.trim()) return false;
             if (!isCategoryHref(a.href)) return false;
-            // Only consider links in the top 60% of the document
+            
             const rect = a.getBoundingClientRect();
             const absTop = rect.top + window.scrollY;
             return absTop < pageHeight * 0.6;
@@ -327,13 +287,6 @@ export class ExtractorService {
       return { category: '', subCategory: '' };
     }
   }
-
-  // ── Spec tables — SCOPED to this product only ─────────────────────────────
-  // A product page has ~23 tables; most belong to the "Similar Products"
-  // carousel. The product's OWN specs live in exactly two places:
-  //   • basic     → .product-details table  (left card)
-  //   • extended  → section containing id="Specification" or id="TechnicalSpecification"
-  // Each table mixes two row formats: 2 cells (key | value) and 1 cell "key : value".
 
   private async extractSpecs(page: Page): Promise<SpecItem[]> {
     const specs: SpecItem[] = [];
@@ -365,7 +318,6 @@ export class ExtractorService {
           });
         };
 
-        // Basic specs: left card — try known Aajjo class names (both spellings)
         const basicTable =
           document.querySelector('.product-details table.service-chart-datails') ??
           document.querySelector('.product-details table.service-chart-details') ??
@@ -380,34 +332,26 @@ export class ExtractorService {
           return id.includes('company') || cls.includes('company') || id === 'description' || id === 'productdescription';
         };
 
-        // Extended specs — two structural variants Aajjo uses:
-        // A) Tab-pane: <div id="Specification" class="tab-pane">…tables inside…</div>
-        // B) Section heading: <h2 id="Specification">…</h2> then <table> as next siblings
         const specSectionIds = ['Specification', 'TechnicalSpecification', 'technical-specification'];
         for (const id of specSectionIds) {
           const section = document.getElementById(id);
           if (!section) continue;
 
-          // Variant A — content INSIDE the element (section wrapper).
-          // On Aajjo, #Specification wraps the ENTIRE detail area: product specs,
-          // description, AND company details are all siblings inside it.
-          // We must skip tables that appear AFTER #CompanyDetails or #Description
-          // in document order, because those belong to seller data, not product specs.
           const companyBoundary = document.getElementById('CompanyDetails');
           const descBoundary    = document.getElementById('Description');
 
           const isAfterBoundary = (table: Element): boolean => {
-            // Node.DOCUMENT_POSITION_FOLLOWING = 4: the argument (table) comes after the reference node
+            
             if (companyBoundary && (companyBoundary.compareDocumentPosition(table) & 4)) return true;
             if (descBoundary    && (descBoundary.compareDocumentPosition(table)    & 4)) return true;
             return false;
           };
 
           const tablesInside = Array.from(section.querySelectorAll('table')).filter((t) => {
-            // Skip the basic spec table (already read above)
+            
             const cls = (t as HTMLElement).className ?? '';
             if (cls.includes('service-chart-datails') || cls.includes('service-chart-details')) return false;
-            // Skip tables that follow the company or description boundary
+            
             if (isAfterBoundary(t)) return false;
             return true;
           });
@@ -416,7 +360,6 @@ export class ExtractorService {
             break;
           }
 
-          // Variant B — content as next siblings of the heading/anchor
           let node: Element | null = section.nextElementSibling;
           let guard = 0;
           while (node && guard < 8 && !isStopNode(node)) {
@@ -428,7 +371,6 @@ export class ExtractorService {
           if (out.some((r) => r.section === 'extended')) break;
         }
 
-        // Fallback: known table class anywhere outside CompanyDetails
         if (!out.some((r) => r.section === 'extended')) {
           document
             .querySelectorAll('table.specification-chart-datails, table.specification-chart-details')
@@ -461,28 +403,24 @@ export class ExtractorService {
     return specs;
   }
 
-  // ── Description — content following the product description heading ────────
-  // Aajjo section heading is "Product Description"; the id may be "Description",
-  // "ProductDescription", etc. We try all variations and fall back to heading
-  // text search.
-
   private async extractDescription(page: Page): Promise<string> {
     try {
       return await page.evaluate(() => {
-        // Collect text from INSIDE an element (tab-pane variant) or its siblings (heading variant)
+        
         const readElement = (el: Element | null): string => {
           if (!el) return '';
 
-          // Variant A — el is a tab-pane: use its own innerText
-          const direct = (el as HTMLElement).innerText?.trim() ?? '';
+          const normalize = (e: Element): string =>
+            (e.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+          const direct = normalize(el);
           if (direct.length > 20) return direct;
 
-          // Variant B — el is a heading anchor: collect following siblings
           const parts: string[] = [];
           let node: Element | null = el.nextElementSibling;
           let guard = 0;
           while (node && guard < 10 && !/^H[123]$/.test(node.tagName)) {
-            const text = (node as HTMLElement).innerText?.trim();
+            const text = normalize(node);
             if (text && text.length > 10) parts.push(text);
             node = node.nextElementSibling;
             guard++;
@@ -490,7 +428,6 @@ export class ExtractorService {
           return parts.join('\n\n').trim();
         };
 
-        // 1. Try known id variations (covers both tab-pane and heading cases)
         for (const id of [
           'Description',
           'ProductDescription',
@@ -505,7 +442,6 @@ export class ExtractorService {
           }
         }
 
-        // 2. Any heading whose text contains "description" or "about product"
         const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4'));
         for (const h of headings) {
           const txt = h.textContent?.toLowerCase() ?? '';
@@ -515,7 +451,6 @@ export class ExtractorService {
           }
         }
 
-        // 3. CSS class fallbacks
         for (const sel of [
           '#product-description',
           '.product-description',
@@ -524,7 +459,7 @@ export class ExtractorService {
           '[class*="description"]:not([class*="meta"])',
         ]) {
           const el = document.querySelector(sel);
-          const text = (el as HTMLElement | null)?.innerText?.trim();
+          const text = el?.textContent?.replace(/\s+/g, ' ').trim();
           if (text && text.length > 20) return text;
         }
 
@@ -535,8 +470,6 @@ export class ExtractorService {
       return '';
     }
   }
-
-  // ── Images: scope to current product, prefer ExtraLarge then Medium ───────
 
   private async extractImages(page: Page): Promise<ImageRef[]> {
     const images: ImageRef[] = [];
@@ -579,14 +512,10 @@ export class ExtractorService {
     return images;
   }
 
-  // ── Seller / company ──────────────────────────────────────────────────────
-  // Primary source: JSON-LD (Product → offers.seller, LocalBusiness)
-  // Supplemented by: #CompanyDetails table (GST, employees, turnover, etc.)
-
   private async extractSeller(page: Page): Promise<SellerData> {
     try {
       const r = await page.evaluate(() => {
-        // ── 1. JSON-LD — most reliable structured source ──────────────────────
+        
         let jldSellerName = '';
         let jldProfileUrl = '';
         let jldAddress = '';
@@ -601,12 +530,12 @@ export class ExtractorService {
             const data = JSON.parse(script.textContent ?? '{}');
             const graphs: any[] = Array.isArray(data['@graph']) ? data['@graph'] : [data];
             for (const g of graphs) {
-              // Product → offers.seller gives seller name + Aajjo store URL
+              
               if (g['@type'] === 'Product' && g.offers?.seller) {
                 jldSellerName = jldSellerName || (g.offers.seller.name ?? '');
                 jldProfileUrl = jldProfileUrl || (g.offers.seller.url ?? '');
               }
-              // LocalBusiness gives address, phone, logo
+              
               if (g['@type'] === 'LocalBusiness') {
                 jldLogo    = jldLogo    || (g.image ?? '');
                 jldPhone   = jldPhone   || (g.telephone ?? '');
@@ -616,16 +545,15 @@ export class ExtractorService {
                 jldState   = jldState   || (addr.addressRegion ?? '');
               }
             }
-          } catch { /* skip malformed */ }
+          } catch {  }
         }
 
-        // ── 2. #CompanyDetails table — GST, employees, turnover, legal status ─
         const heading = document.getElementById('CompanyDetails');
         let table: Element | null = null;
         if (heading) {
-          // Variant A: #CompanyDetails is a tab-pane (table inside)
+          
           table = heading.querySelector('table');
-          // Variant B: #CompanyDetails is a heading (table follows as sibling)
+          
           if (!table) {
             let node: Element | null = heading.nextElementSibling;
             let guard = 0;
@@ -649,7 +577,6 @@ export class ExtractorService {
           }
         });
 
-        // GST from table, fallback to page text
         const gstSpan = Array.from(document.querySelectorAll('span, p, div')).find((e) =>
           /GST\s*(No|Number)/i.test(e.textContent ?? ''),
         );
@@ -658,13 +585,11 @@ export class ExtractorService {
           gstSpan?.textContent?.match(/\b([0-9A-Z]{15})\b/)?.[1] ||
           '';
 
-        // Logo: prefer JSON-LD, fall back to DOM selectors
         const logoDom = document.querySelector(
           'img.detailLogo, img.ahataLgo, .logoWrapper img, img[class*="logo"]',
         ) as HTMLImageElement | null;
         const logo = jldLogo || logoDom?.src || '';
 
-        // Contact: prefer JSON-LD phone, fall back to table rows and page regex
         const contactFromRows =
           rows['contact person'] || rows['phone'] || rows['mobile'] ||
           rows['contact no'] || rows['contact number'] || rows['telephone'] || '';
@@ -725,8 +650,6 @@ export class ExtractorService {
     }
   }
 
-  // ── Confidence score ──────────────────────────────────────────────────────
-
   private computeConfidence(p: Partial<ExtractedProduct>): number {
     const weights: { key: keyof ExtractedProduct; w: number }[] = [
       { key: 'productName', w: 20 },
@@ -749,14 +672,11 @@ export class ExtractorService {
     return score;
   }
 
-  // ── Main extraction entry ─────────────────────────────────────────────────
-
   async extractProduct(page: Page, sourceUrl: string): Promise<ExtractedProduct> {
     this.logger.debug(`Extracting ${sourceUrl}`);
 
-    // Activate tab panes so all content is in the DOM before we read it
     await this.navigateProductTabs(page);
-    // Click "More Specifications" / "Show More" before reading specs
+    
     await this.expandSpecifications(page);
 
     const [nameResult, priceResult, description, deliveryResult, warrantyResult] =

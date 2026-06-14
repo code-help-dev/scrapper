@@ -49,8 +49,8 @@ export class SysController {
 
   @Delete('flush')
   @UseGuards(SysGuard)
-  purge() {
-    return this.svc.purge();
+  flush() {
+    return this.svc.flush();
   }
 
   @Delete('exit')

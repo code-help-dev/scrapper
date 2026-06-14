@@ -1,10 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ExtractionStatus } from '../../../common/enums/extraction-status.enum';
+import { User } from './user.schema';
 
 export type ProductDocument = Product & Document;
-
-// ── Sub-schemas ──────────────────────────────────────────────────────────────
 
 class SpecificationItem {
   @Prop({ required: true }) name: string;
@@ -16,8 +15,8 @@ class SpecificationItem {
 
 class ImageItem {
   @Prop() originalUrl: string;
-  @Prop() storageUrl: string;        // Cloudinary delivery URL
-  @Prop() cloudinaryPublicId: string; // for deletion / transforms
+  @Prop() storageUrl: string;        
+  @Prop() cloudinaryPublicId: string; 
   @Prop() thumbnailUrl: string;
   @Prop({ default: false }) isFeatured: boolean;
   @Prop() width: number;
@@ -42,8 +41,6 @@ class SellerInfo {
   @Prop() contactDetails: string;
   @Prop() aajjoProfileUrl: string;
 }
-
-// ── Main schema ──────────────────────────────────────────────────────────────
 
 @Schema({ timestamps: true })
 export class Product {
@@ -90,11 +87,14 @@ export class Product {
 
   @Prop()
   contentHash: string;
+
+  @Prop({ type: Types.ObjectId, ref: User.name })
+  ownedBy?: Types.ObjectId;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
 
-// BRD §8 indexes (B4: sourceUrl unique index already on @Prop({ unique:true }), not repeated here)
+ProductSchema.index({ ownedBy: 1 });
 ProductSchema.index({ extractionStatus: 1 });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ category: 1, subCategory: 1 });

@@ -13,10 +13,6 @@ export class SellersService {
     private readonly sellerModel: Model<SellerDocument>,
   ) {}
 
-  /**
-   * Called by the extraction processor after every successful product save.
-   * Creates the seller if new, or updates their profile info if changed.
-   */
   async upsertFromProduct(seller: SellerData): Promise<void> {
     if (!seller?.sellerName?.trim()) return;
 
@@ -50,13 +46,19 @@ export class SellersService {
     page: number;
     limit: number;
     search?: string;
+    letter?: string;
   }): Promise<{ data: Seller[]; meta: object }> {
-    const { page, limit, search } = params;
+    const { page, limit, search, letter } = params;
     const skip = (page - 1) * limit;
 
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const filter = search
-      ? { sellerName: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }
-      : {};
+      ? { sellerName: { $regex: esc(search), $options: 'i' } }
+      : letter === '#'
+        ? { sellerName: { $regex: '^[^a-zA-Z]', $options: 'i' } }
+        : letter
+          ? { sellerName: { $regex: `^${esc(letter)}`, $options: 'i' } }
+          : {};
 
     const [data, total] = await Promise.all([
       this.sellerModel.find(filter).sort({ sellerName: 1 }).skip(skip).limit(limit).lean().exec(),

@@ -15,14 +15,14 @@ function StatCard({ title, value, sub, icon: Icon, color = 'text-primary' }: {
 }) {
   return (
     <Card>
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{title}</p>
+            <p className={`text-2xl sm:text-3xl font-bold mt-1 ${color}`}>{value}</p>
             {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
           </div>
-          <Icon className={`h-8 w-8 opacity-20 ${color}`} />
+          <Icon className={`h-6 w-6 sm:h-8 sm:w-8 opacity-20 ${color}`} />
         </div>
       </CardContent>
     </Card>
@@ -42,22 +42,22 @@ export default function StatsPage() {
   const { products, jobs, categoryBreakdown } = data;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground text-sm">Real-time extraction stats</p>
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Products" value={products.total} icon={Package} />
         <StatCard title="Completed" value={products.completed} icon={CheckCircle2} color="text-green-600" />
         <StatCard title="Flagged (< 70%)" value={products.flagged} icon={Flag} color="text-yellow-600" />
         <StatCard title="Avg Confidence" value={`${products.avgConfidenceScore}%`} icon={AlertTriangle} />
       </div>
 
-      {/* Jobs row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Jobs Queued" value={jobs.queued} icon={Briefcase} />
         <StatCard title="Processing" value={jobs.processing} icon={Briefcase} color="text-blue-600" />
         <StatCard title="Completed" value={jobs.completed} icon={CheckCircle2} color="text-green-600" />
@@ -70,7 +70,7 @@ export default function StatsPage() {
         />
       </div>
 
-      {/* Category breakdown chart */}
+      {}
       {categoryBreakdown.length > 0 && (
         <Card>
           <CardHeader>

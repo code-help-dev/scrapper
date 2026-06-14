@@ -23,4 +23,3 @@ export class Seller {
 }
 
 export const SellerSchema = SchemaFactory.createForClass(Seller);
-SellerSchema.index({ sellerName: 1 });

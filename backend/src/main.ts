@@ -9,26 +9,25 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  // ── Logger ─────────────────────────────────────────────────────
   app.useLogger(app.get(Logger));
 
-  // ── Security ────────────────────────────────────────────────────
   app.use(helmet());
   app.use(compression());
 
-  // ── CORS ────────────────────────────────────────────────────────
   app.enableCors({
     origin:
       process.env.NODE_ENV === 'production'
         ? process.env.FRONTEND_URL?.split(',') ?? false
         : true,
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
-  // ── Global prefix ────────────────────────────────────────────────
   app.setGlobalPrefix('api');
 
-  // ── Validation ───────────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -38,7 +37,6 @@ async function bootstrap() {
     }),
   );
 
-  // ── Swagger ──────────────────────────────────────────────────────
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Aajjo Scraper API')
     .setDescription('Aajjo Product Catalog Scraper — Phase 1 REST API')

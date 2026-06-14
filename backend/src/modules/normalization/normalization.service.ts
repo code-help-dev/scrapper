@@ -37,7 +37,6 @@ export class NormalizationService implements OnModuleInit {
       const raw = fs.readFileSync(configPath, 'utf-8');
       const parsed = yaml.load(raw) as FieldMappingConfig;
 
-      // Separate unit rules from field mappings
       const { unit_normalization, ...mappings } = parsed;
       this.fieldMap = mappings as Record<string, string>;
       this.unitRules = (unit_normalization as UnitNormalization) ?? null;
@@ -48,13 +47,9 @@ export class NormalizationService implements OnModuleInit {
     }
   }
 
-  // ── Field name mapping ────────────────────────────────────────────────────
-
   private mapFieldName(rawName: string): string {
     return this.fieldMap[rawName] ?? this.fieldMap[rawName.toLowerCase()] ?? null;
   }
-
-  // ── Unit normalization ────────────────────────────────────────────────────
 
   private normalizeUnit(
     value: string,
@@ -82,14 +77,11 @@ export class NormalizationService implements OnModuleInit {
     return value;
   }
 
-  // ── Spec normalization ────────────────────────────────────────────────────
-
   normalizeSpecs(specs: SpecItem[]): SpecItem[] {
     return specs.map((spec) => {
       const mappedName = this.mapFieldName(spec.rawName);
       let normalizedValue = spec.value;
 
-      // Apply unit rules based on field name
       if (this.unitRules) {
         const lower = (mappedName ?? spec.name).toLowerCase();
         if (lower.includes('weight')) {
@@ -109,16 +101,12 @@ export class NormalizationService implements OnModuleInit {
     });
   }
 
-  // ── Price coercion ────────────────────────────────────────────────────────
-
   normalizePrice(raw: number | null, currency: string): { price: number | null; currency: string } {
     return {
       price: raw,
       currency: this.normalizeCurrency(currency || 'INR') || 'INR',
     };
   }
-
-  // ── Normalize full extracted product ─────────────────────────────────────
 
   normalize(product: ExtractedProduct): ExtractedProduct {
     const { price, currency } = this.normalizePrice(product.price, product.currency);

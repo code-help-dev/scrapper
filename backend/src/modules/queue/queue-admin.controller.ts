@@ -1,10 +1,17 @@
-import { Controller, Get, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { QUEUE_EXTRACTION, QUEUE_IMAGE, QUEUE_EXPORT } from './queue.constants';
 
 @ApiTags('Queue Admin')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('queue')
 export class QueueAdminController {
   constructor(
@@ -32,15 +39,15 @@ export class QueueAdminController {
     };
   }
 
-  @Post('obliterate')
+  @Post('clear')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Nuclear stop — wipe all jobs from every queue (no auth required)',
+    summary: 'Clear all jobs from every queue (no auth required)',
     description:
-      'Obliterates all waiting, delayed, and active jobs from extraction, image, and export queues. ' +
-      'Use this when MongoDB is dropped and you need to halt the scraper immediately.',
+      'Removes all waiting, delayed, and active jobs from extraction, image, and export queues. ' +
+      'Use this to halt the scraper and clear all pending work immediately.',
   })
-  async obliterate() {
+  async clearQueues() {
     await Promise.all([
       this.extractionQueue.obliterate({ force: true }),
       this.imageQueue.obliterate({ force: true }),
@@ -48,7 +55,7 @@ export class QueueAdminController {
     ]);
 
     return {
-      message: 'All queues obliterated — no jobs remain.',
+      message: 'All queues cleared — no jobs remain.',
       queues: [QUEUE_EXTRACTION, QUEUE_IMAGE, QUEUE_EXPORT],
       timestamp: new Date().toISOString(),
     };

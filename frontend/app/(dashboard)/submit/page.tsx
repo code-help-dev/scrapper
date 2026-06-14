@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 
 const schema = z.object({
-  url: z.string().url('Must be a valid URL').includes('aajjo.com', { message: 'Must be an aajjo.com URL' }),
+  url: z.string().url('Must be a valid URL'),
   label: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
@@ -33,9 +33,14 @@ export default function SubmitPage() {
     setSubmitting(true);
     try {
       const res = await jobsApi.submitUrl(data.url, data.label);
-      setLastJob({ jobId: res.data.jobId, url: data.url });
-      toast.success(`Job queued — ID: ${res.data.jobId}`);
-      reset();
+      const { jobId, message } = res.data;
+      if (jobId) {
+        setLastJob({ jobId, url: data.url });
+        toast.success(`Job queued — ID: ${jobId}`);
+        reset();
+      } else {
+        toast.warning(message ?? 'URL already processed or skipped');
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.message ?? 'Submission failed');
     } finally {
@@ -49,8 +54,13 @@ export default function SubmitPage() {
     setUploading(true);
     try {
       const res = await jobsApi.submitBulk(file);
-      setBulkResult({ queued: res.data.queued, skipped: res.data.skipped });
-      toast.success(`${res.data.queued} jobs queued`);
+      const { queued, skipped } = res.data;
+      setBulkResult({ queued, skipped });
+      if (queued > 0) {
+        toast.success(`${queued} job${queued > 1 ? 's' : ''} queued`);
+      } else {
+        toast.warning(`No new jobs queued — all ${skipped} URL${skipped > 1 ? 's' : ''} already processed or invalid`);
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.message ?? 'Upload failed');
     } finally {
@@ -60,27 +70,27 @@ export default function SubmitPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 sm:space-y-6 max-w-2xl w-full">
       <div>
         <h1 className="text-2xl font-bold">Submit URLs</h1>
-        <p className="text-muted-foreground text-sm">Queue Aajjo supplier or product pages for scraping</p>
+        <p className="text-muted-foreground text-sm">Queue supplier or product pages for scraping</p>
       </div>
 
-      {/* Single URL */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Link2 className="h-4 w-4" /> Single URL
           </CardTitle>
-          <CardDescription>Submit one Aajjo URL to scrape immediately</CardDescription>
+          <CardDescription>Submit one URL to scrape immediately</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSingleSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="url">Aajjo URL</Label>
+              <Label htmlFor="url">URL</Label>
               <Input
                 id="url"
-                placeholder="https://www.aajjo.com/supplier/..."
+                placeholder="https://www.aajjo.com/supplier/... or seller catalogue URL"
                 {...register('url')}
               />
               {errors.url && <p className="text-xs text-destructive">{errors.url.message}</p>}
@@ -105,13 +115,13 @@ export default function SubmitPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk CSV */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Upload className="h-4 w-4" /> Bulk CSV Upload
           </CardTitle>
-          <CardDescription>Upload a CSV file — one Aajjo URL per line, max 500 URLs</CardDescription>
+          <CardDescription>Upload a CSV file — one URL per line, max 500 URLs</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">

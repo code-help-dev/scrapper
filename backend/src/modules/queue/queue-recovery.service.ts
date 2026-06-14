@@ -7,11 +7,6 @@ import {
 } from '../database/schemas/extraction-job.schema';
 import { JobStatus } from '../../common/enums/job-status.enum';
 
-/**
- * B5: When the server restarts, any jobs left in "processing" state were
- * interrupted mid-run (BullMQ worker died). Reset them to "failed" so they
- * appear in the failed-jobs panel and can be retried manually.
- */
 @Injectable()
 export class QueueRecoveryService implements OnApplicationBootstrap {
   private readonly logger = new Logger(QueueRecoveryService.name);

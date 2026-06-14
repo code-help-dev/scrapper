@@ -9,13 +9,11 @@ console.log('Navigating to:', URL);
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
 await new Promise(r => setTimeout(r, 3000));
 
-// Check what product link selectors exist
 const results = await page.evaluate(() => {
   const productLinks = Array.from(document.querySelectorAll('a[href*="/product/"]'))
     .map(a => a.href)
     .filter(h => /aajjo\.com\/product\//i.test(h));
 
-  // Also check all anchor hrefs to understand the URL structure
   const allLinks = Array.from(document.querySelectorAll('a[href]'))
     .map(a => a.getAttribute('href'))
     .filter(h => h && h.includes('aajjo.com') || (h && h.startsWith('/')))
