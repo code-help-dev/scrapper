@@ -1,0 +1,137 @@
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
+import { Product, ProductDocument } from '../database/schemas/product.schema';
+import {
+  ExtractionJob,
+  ExtractionJobDocument,
+} from '../database/schemas/extraction-job.schema';
+import { ExportJob, ExportJobDocument } from '../database/schemas/export-job.schema';
+
+@ApiTags('Dashboard')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('dashboard')
+export class DashboardController {
+  constructor(
+    @InjectModel(Product.name)
+    private readonly productModel: Model<ProductDocument>,
+    @InjectModel(ExtractionJob.name)
+    private readonly jobModel: Model<ExtractionJobDocument>,
+    @InjectModel(ExportJob.name)
+    private readonly exportJobModel: Model<ExportJobDocument>,
+  ) {}
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Extraction & system stats for the dashboard' })
+  async getStats(@CurrentUser() user: { id: string; role: string }) {
+    const isAdmin = user.role === UserRole.ADMIN;
+    const productFilter = isAdmin ? {} : { ownedBy: new Types.ObjectId(user.id) };
+    const jobFilter = isAdmin ? {} : { submittedBy: new Types.ObjectId(user.id) };
+
+    const [
+      totalProducts,
+      completedProducts,
+      failedProducts,
+      flaggedProducts,
+      pendingJobs,
+      processingJobs,
+      completedJobs,
+      failedJobs,
+      avgConfidenceResult,
+      categoryBreakdown,
+    ] = await Promise.all([
+      this.productModel.countDocuments(productFilter).exec(),
+      this.productModel.countDocuments({ ...productFilter, extractionStatus: 'completed' }).exec(),
+      this.productModel.countDocuments({ ...productFilter, extractionStatus: 'failed' }).exec(),
+      this.productModel.countDocuments({ ...productFilter, isFlagged: true }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'queued' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'processing' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'completed' }).exec(),
+      this.jobModel.countDocuments({ ...jobFilter, status: 'failed' }).exec(),
+      this.productModel
+        .aggregate([
+          { $match: productFilter },
+          { $group: { _id: null, avg: { $avg: '$confidenceScore' } } },
+        ])
+        .exec(),
+      this.productModel
+        .aggregate([
+          { $match: productFilter },
+          { $group: { _id: '$category', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 },
+        ])
+        .exec(),
+    ]);
+
+    const successRate =
+      completedJobs + failedJobs > 0
+        ? Math.round((completedJobs / (completedJobs + failedJobs)) * 100)
+        : 0;
+
+    return {
+      products: {
+        total: totalProducts,
+        completed: completedProducts,
+        failed: failedProducts,
+        flagged: flaggedProducts,
+        avgConfidenceScore: Math.round(avgConfidenceResult[0]?.avg ?? 0),
+      },
+      jobs: {
+        queued: pendingJobs,
+        processing: processingJobs,
+        completed: completedJobs,
+        failed: failedJobs,
+        successRate: `${successRate}%`,
+      },
+      categoryBreakdown: categoryBreakdown.map((c: any) => ({
+        category: c._id || 'Uncategorized',
+        count: c.count,
+      })),
+    };
+  }
+
+  @Get('jobs')
+  @ApiOperation({ summary: 'Recent extraction jobs for job-monitor panel' })
+  async getJobs(@CurrentUser() user: { id: string; role: string }) {
+    const filter = user.role === UserRole.ADMIN ? {} : { submittedBy: new Types.ObjectId(user.id) };
+    const jobs = await this.jobModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean()
+      .exec();
+    return { data: jobs };
+  }
+
+  @Get('jobs/failed')
+  @ApiOperation({ summary: 'Failed jobs — with error reasons for retry panel' })
+  async getFailedJobs(@CurrentUser() user: { id: string; role: string }) {
+    const filter: Record<string, unknown> = { status: 'failed' };
+    if (user.role !== UserRole.ADMIN) filter.submittedBy = new Types.ObjectId(user.id);
+    const jobs = await this.jobModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+    return { data: jobs, count: jobs.length };
+  }
+
+  @Get('exports')
+  @ApiOperation({ summary: 'Export history — completed export files' })
+  async getExportHistory(@CurrentUser() user: { id: string; role: string }) {
+    const filter = user.role === UserRole.ADMIN ? {} : { generatedBy: new Types.ObjectId(user.id) };
+    const exports = await this.exportJobModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean()
+      .exec();
+    return { data: exports };
+  }
+}
