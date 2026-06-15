@@ -9,7 +9,7 @@ RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
-RUN npm prune --production
+RUN npm prune --production --legacy-peer-deps
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.48.0-jammy
