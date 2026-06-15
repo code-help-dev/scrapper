@@ -1,0 +1,62 @@
+services:
+  # ── Infrastructure ───────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: aajjo_scraper
+    # To use MongoDB Atlas instead, remove this service and set
+    # MONGODB_URI in .env.docker pointing to your Atlas cluster.
+
+  # ── Backend (NestJS + Playwright) ────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.docker
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MONGODB_URI: mongodb://mongo:27017/aajjo_scraper
+      FRONTEND_URL: http://localhost:3000
+      EXPORT_STORAGE_PATH: /app/exports
+    volumes:
+      - exports_data:/app/exports
+    depends_on:
+      - redis
+      - mongo
+
+  # ── Frontend (Next.js) ───────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # NEXT_PUBLIC_* is used by the browser — must be localhost
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+      # API_URL is used server-side (SSR) — use the service name
+      API_URL: http://backend:3001/api
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: change-me-in-production
+    depends_on:
+      - backend
+
+volumes:
+  redis_data:
+  mongo_data:
+  exports_data:
