@@ -15,8 +15,8 @@ class SpecificationItem {
 
 class ImageItem {
   @Prop() originalUrl: string;
-  @Prop() storageUrl: string;        
-  @Prop() cloudinaryPublicId: string; 
+  @Prop() storageUrl: string;
+  @Prop() s3Key: string;
   @Prop() thumbnailUrl: string;
   @Prop({ default: false }) isFeatured: boolean;
   @Prop() width: number;
