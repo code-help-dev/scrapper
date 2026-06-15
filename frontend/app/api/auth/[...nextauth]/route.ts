@@ -2,7 +2,8 @@ import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import axios from 'axios';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+// API_URL is the server-side URL (localhost); NEXT_PUBLIC_API_URL is the browser-facing URL
+const API_BASE = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
 const ACCESS_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000 - 5 * 60 * 1000;
 
@@ -23,7 +24,7 @@ async function refreshAccessToken(token: any) {
   }
 }
 
-export const authOptions: NextAuthOptions = {
+const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'credentials',

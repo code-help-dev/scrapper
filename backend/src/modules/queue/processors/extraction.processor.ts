@@ -197,7 +197,7 @@ export class ExtractionProcessor extends WorkerHost {
             originalUrl: img.originalUrl,
             isFeatured: img.isFeatured,
             storageUrl: '',
-            cloudinaryPublicId: '',
+            s3Key: '',
             thumbnailUrl: '',
             format: '',
           })),

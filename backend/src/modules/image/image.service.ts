@@ -4,7 +4,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import sharp from 'sharp';
 import axios from 'axios';
-import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { Product, ProductDocument } from '../database/schemas/product.schema';
 
 const imageHashLib = require('image-hash');
@@ -18,8 +19,8 @@ const imageHashAsync = (input: unknown, bits: number, precise: boolean): Promise
 
 export interface ProcessedImage {
   originalUrl: string;
-  storageUrl: string;         
-  cloudinaryPublicId: string;
+  storageUrl: string;
+  s3Key: string;
   thumbnailUrl: string;
   isFeatured: boolean;
   width: number;
@@ -31,27 +32,48 @@ export interface ProcessedImage {
 
 const MIN_WIDTH = 200;
 const MIN_HEIGHT = 200;
-const THUMBNAIL_WIDTH = 300;
 
 @Injectable()
 export class ImageService {
   private readonly logger = new Logger(ImageService.name);
-  private readonly folder: string;
+  private readonly s3: S3Client;
+  private readonly bucket: string;
+  private readonly imagePrefix: string;
 
   constructor(
     private readonly config: ConfigService,
     @InjectModel(Product.name)
     private readonly productModel: Model<ProductDocument>,
   ) {
-    const { cloudName, apiKey, apiSecret, folder } = {
-      cloudName: config.get<string>('cloudinary.cloudName'),
-      apiKey: config.get<string>('cloudinary.apiKey'),
-      apiSecret: config.get<string>('cloudinary.apiSecret'),
-      folder: config.get<string>('cloudinary.folder') ?? 'aajjo-scraper',
-    };
+    this.bucket = config.get<string>('s3.bucket')!;
+    this.imagePrefix = config.get<string>('s3.imagePrefix') ?? 'images';
 
-    cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
-    this.folder = folder;
+    this.s3 = new S3Client({
+      region: config.get<string>('s3.region') ?? 'ap-south-1',
+      credentials: {
+        accessKeyId: config.get<string>('s3.accessKeyId')!,
+        secretAccessKey: config.get<string>('s3.secretAccessKey')!,
+      },
+    });
+  }
+
+  private buildUrl(key: string): string {
+    const region = this.config.get<string>('s3.region') ?? 'ap-south-1';
+    return `https://${this.bucket}.s3.${region}.amazonaws.com/${key}`;
+  }
+
+  private async uploadToS3(buffer: Buffer, key: string): Promise<void> {
+    const upload = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: 'image/webp',
+        CacheControl: 'max-age=31536000',
+      },
+    });
+    await upload.done();
   }
 
   private async downloadImage(url: string): Promise<Buffer> {
@@ -59,8 +81,7 @@ export class ImageService {
       responseType: 'arraybuffer',
       timeout: 30000,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Referer: 'https://www.aajjo.com/',
       },
     });
@@ -69,12 +90,7 @@ export class ImageService {
 
   private async computePHash(buffer: Buffer): Promise<string> {
     try {
-      
-      const hash = await imageHashAsync(
-        { data: buffer, ext: 'webp' },
-        16,
-        true,
-      );
+      const hash = await imageHashAsync({ data: buffer, ext: 'webp' }, 16, true);
       return hash as string;
     } catch {
       return '';
@@ -83,45 +99,8 @@ export class ImageService {
 
   private async isDuplicate(pHash: string): Promise<boolean> {
     if (!pHash) return false;
-    const exists = await this.productModel
-      .exists({ 'images.pHash': pHash })
-      .exec();
+    const exists = await this.productModel.exists({ 'images.pHash': pHash }).exec();
     return !!exists;
-  }
-
-  private uploadToCloudinary(
-    buffer: Buffer,
-    publicId: string,
-  ): Promise<UploadApiResponse> {
-    return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: this.folder,
-          public_id: publicId,
-          resource_type: 'image',
-          overwrite: false,
-          
-          format: 'webp',
-          quality: 'auto:best',
-          
-          transformation: [{ flags: 'preserve_transparency' }],
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result!);
-        },
-      );
-      stream.end(buffer);
-    });
-  }
-
-  private buildThumbnailUrl(publicId: string): string {
-    return cloudinary.url(publicId, {
-      width: THUMBNAIL_WIDTH,
-      crop: 'fit',
-      format: 'webp',
-      quality: 'auto',
-    });
   }
 
   async processImage(
@@ -131,7 +110,6 @@ export class ImageService {
   ): Promise<ProcessedImage | null> {
     try {
       const rawBuffer = await this.downloadImage(originalUrl);
-
       const sharpInstance = sharp(rawBuffer);
       const metadata = await sharpInstance.metadata();
 
@@ -139,15 +117,11 @@ export class ImageService {
       const origHeight = metadata.height ?? 0;
 
       if (origWidth < MIN_WIDTH || origHeight < MIN_HEIGHT) {
-        this.logger.warn(
-          `Image too small (${origWidth}×${origHeight}) — skipping: ${originalUrl}`,
-        );
+        this.logger.warn(`Image too small (${origWidth}×${origHeight}) — skipping: ${originalUrl}`);
         return null;
       }
 
-      const webpBuffer = await sharpInstance
-        .webp({ quality: 95, effort: 4 })
-        .toBuffer();
+      const webpBuffer = await sharpInstance.webp({ quality: 92, effort: 4 }).toBuffer();
 
       const pHash = await this.computePHash(webpBuffer);
       if (await this.isDuplicate(pHash)) {
@@ -155,20 +129,22 @@ export class ImageService {
         return null;
       }
 
-      const publicId = `${productId}_${Date.now()}`;
-      const uploaded = await this.uploadToCloudinary(webpBuffer, publicId);
+      const slug = `${productId}_${Date.now()}`;
+      const imageKey = `${this.imagePrefix}/${productId}/${slug}.webp`;
 
-      const thumbnailUrl = this.buildThumbnailUrl(uploaded.public_id);
+      await this.uploadToS3(webpBuffer, imageKey);
+
+      const finalMeta = await sharp(webpBuffer).metadata();
 
       return {
         originalUrl,
-        storageUrl: uploaded.secure_url,
-        cloudinaryPublicId: uploaded.public_id,
-        thumbnailUrl,
+        storageUrl: this.buildUrl(imageKey),
+        s3Key: imageKey,
+        thumbnailUrl: this.buildUrl(imageKey),
         isFeatured,
-        width: uploaded.width,
-        height: uploaded.height,
-        sizeBytes: uploaded.bytes,
+        width: finalMeta.width ?? origWidth,
+        height: finalMeta.height ?? origHeight,
+        sizeBytes: webpBuffer.length,
         pHash,
         format: 'webp',
       };
@@ -197,11 +173,11 @@ export class ImageService {
     return results;
   }
 
-  async deleteImage(cloudinaryPublicId: string): Promise<void> {
+  async deleteImage(s3Key: string): Promise<void> {
     try {
-      await cloudinary.uploader.destroy(cloudinaryPublicId);
+      await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: s3Key }));
     } catch (err: any) {
-      this.logger.error(`Failed to delete Cloudinary asset ${cloudinaryPublicId}: ${err.message}`);
+      this.logger.error(`Failed to delete S3 object ${s3Key}: ${err.message}`);
     }
   }
 }

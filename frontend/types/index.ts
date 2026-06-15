@@ -44,7 +44,7 @@ export interface SpecItem {
 export interface ProductImage {
   originalUrl: string;
   storageUrl: string;
-  cloudinaryPublicId: string;
+  s3Key: string;
   thumbnailUrl: string;
   isFeatured: boolean;
   width: number;

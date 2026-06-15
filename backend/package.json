@@ -41,7 +41,6 @@
     "bullmq": "^5.17.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
-    "cloudinary": "^2.10.0",
     "compression": "^1.7.4",
     "csv-stringify": "^6.5.1",
     "date-fns": "^4.1.0",
