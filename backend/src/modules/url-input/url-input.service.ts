@@ -69,11 +69,16 @@ export class UrlInputService {
     });
     await job.save();
 
-    await this.dynamicQueueService.addJob(userId, {
-      jobId: job.id,
-      sourceUrl: url,
-      userId,
-    } satisfies ScrapeUrlPayload);
+    try {
+      await this.dynamicQueueService.addJob(userId, {
+        jobId: job.id,
+        sourceUrl: url,
+        userId,
+      } satisfies ScrapeUrlPayload);
+    } catch (err) {
+      await this.jobModel.findByIdAndDelete(job.id);
+      throw err;
+    }
 
     return job;
   }
@@ -96,12 +101,17 @@ export class UrlInputService {
       });
       await discoveryJob.save();
 
-      await this.dynamicQueueService.addJob(userId, {
-        jobId: discoveryJob.id,
-        sourceUrl: url,
-        userId,
-        isDiscovery: true,
-      } satisfies ScrapeUrlPayload);
+      try {
+        await this.dynamicQueueService.addJob(userId, {
+          jobId: discoveryJob.id,
+          sourceUrl: url,
+          userId,
+          isDiscovery: true,
+        } satisfies ScrapeUrlPayload);
+      } catch (err) {
+        await this.jobModel.findByIdAndDelete(discoveryJob.id);
+        throw err;
+      }
 
       return {
         discoveryJob,
@@ -175,12 +185,17 @@ export class UrlInputService {
             submittedBy: new Types.ObjectId(userId),
           });
           await discoveryJob.save();
-          await this.dynamicQueueService.addJob(userId, {
-            jobId: discoveryJob.id,
-            sourceUrl: url,
-            userId,
-            isDiscovery: true,
-          } satisfies ScrapeUrlPayload);
+          try {
+            await this.dynamicQueueService.addJob(userId, {
+              jobId: discoveryJob.id,
+              sourceUrl: url,
+              userId,
+              isDiscovery: true,
+            } satisfies ScrapeUrlPayload);
+          } catch (err) {
+            await this.jobModel.findByIdAndDelete(discoveryJob.id);
+            throw err;
+          }
           queued.push(discoveryJob);
           continue;
         }

@@ -1,11 +1,10 @@
-import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Logger, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { createHash } from 'crypto';
 import {
-  QUEUE_EXTRACTION,
   QUEUE_IMAGE,
   JOB_PROCESS_IMAGE,
 } from '../queue.constants';
@@ -36,8 +35,8 @@ export interface ProcessImagePayload {
   images: { originalUrl: string; isFeatured: boolean }[];
 }
 
-@Processor(QUEUE_EXTRACTION, { lockDuration: 120000 })
-export class ExtractionProcessor extends WorkerHost {
+@Injectable()
+export class ExtractionProcessor {
   private readonly logger = new Logger(ExtractionProcessor.name);
 
   constructor(
@@ -55,9 +54,7 @@ export class ExtractionProcessor extends WorkerHost {
     private readonly extractorService: ExtractorService,
     private readonly normalizationService: NormalizationService,
     private readonly sellersService: SellersService,
-  ) {
-    super();
-  }
+  ) {}
 
   async process(job: Job<ScrapeUrlPayload>): Promise<void> {
     const { jobId, sourceUrl, userId, isDiscovery, parentJobId } = job.data;
