@@ -164,6 +164,61 @@ export class JobsController {
     );
   }
 
+  @Post('stop-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Stop all active jobs',
+    description:
+      'Cancels every job in QUEUED, PROCESSING, PAUSED, or RETRY state. ' +
+      'Admins stop jobs across all users; regular users stop only their own.',
+  })
+  async stopAll(@CurrentUser() user: { id: string; role: string }) {
+    const isAdmin = user.role === UserRole.ADMIN;
+    const activeStatuses = [
+      JobStatus.QUEUED,
+      JobStatus.PROCESSING,
+      JobStatus.PAUSED,
+      JobStatus.RETRY,
+    ];
+
+    const filter: Record<string, unknown> = { status: { $in: activeStatuses } };
+    if (!isAdmin) {
+      filter.submittedBy = new Types.ObjectId(user.id);
+    }
+
+    const jobs = await this.jobModel
+      .find(filter)
+      .select('_id submittedBy')
+      .lean()
+      .exec();
+
+    if (jobs.length === 0) {
+      return { message: 'No active jobs found', stopped: 0 };
+    }
+
+    // Remove from BullMQ queues; active (locked) jobs silently fail remove — that's fine
+    await Promise.all(
+      jobs.map((job) =>
+        this.dynamicQueueService.removeJob(
+          job.submittedBy.toString(),
+          (job._id as Types.ObjectId).toString(),
+        ),
+      ),
+    );
+
+    await this.jobModel.updateMany(filter, {
+      status: JobStatus.FAILED,
+      errorMessage: 'Stopped by user',
+      completedAt: new Date(),
+    });
+
+    this.logger.log(
+      `stop-all — userId=${user.id} role=${user.role} stopped=${jobs.length}`,
+    );
+
+    return { message: `Stopped ${jobs.length} job(s)`, stopped: jobs.length };
+  }
+
   @Post(':id/pause')
   @ApiOperation({ summary: 'Pause a queued job' })
   async pause(
