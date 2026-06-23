@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { productsApi } from '@/lib/api';
 import {
   Product,
@@ -139,6 +140,8 @@ function CategoryNav({
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50];
 
 export default function ProductsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -146,6 +149,13 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [mobileCatOpen, setMobileCatOpen] = useState(false);
+
+  const showFlagged = searchParams.get('flagged') === 'true';
+
+  const clearFlaggedFilter = () => {
+    router.push('/products');
+    setPage(1);
+  };
 
   const { data: categories = [] } = useQuery<CategoryInfo[]>({
     queryKey: ['product-categories'],
@@ -164,7 +174,7 @@ export default function ProductsPage() {
   });
 
   const { data, isLoading } = useQuery<PaginatedResponse<Product>>({
-    queryKey: ['products', page, limit, selectedCategory, selectedSubcategory, sortBy, sortOrder],
+    queryKey: ['products', page, limit, selectedCategory, selectedSubcategory, sortBy, sortOrder, showFlagged],
     queryFn: () =>
       productsApi
         .list({
@@ -174,6 +184,7 @@ export default function ProductsPage() {
           subCategory: selectedSubcategory || undefined,
           sortBy,
           sortOrder,
+          flagged: showFlagged || undefined,
         })
         .then((r) => r.data),
   });
@@ -262,13 +273,23 @@ export default function ProductsPage() {
           {/* Header row */}
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-xl font-bold">
-                {selectedCategory || 'All Products'}
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                {showFlagged
+                  ? <><Flag className="h-5 w-5 text-yellow-600" /> Flagged Products</>
+                  : (selectedCategory || 'All Products')}
               </h1>
               <p className="text-muted-foreground text-sm">
                 {isLoading ? 'Loading…' : `${totalProducts.toLocaleString()} products`}
                 {selectedSubcategory ? ` · ${selectedSubcategory}` : ''}
               </p>
+              {showFlagged && (
+                <button
+                  onClick={clearFlaggedFilter}
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 hover:bg-yellow-200 transition-colors dark:bg-yellow-900/30 dark:text-yellow-400"
+                >
+                  <Flag className="h-3 w-3" /> Confidence &lt; 70% <X className="h-3 w-3 ml-0.5" />
+                </button>
+              )}
               {/* Mobile categories trigger */}
               <button
                 onClick={() => setMobileCatOpen(true)}
@@ -358,7 +379,9 @@ export default function ProductsPage() {
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-20 text-center">
               <Package className="h-10 w-10 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">
-                {selectedCategory
+                {showFlagged
+                  ? 'No flagged products — all extractions are above 70% confidence'
+                  : selectedCategory
                   ? 'No products found in this category'
                   : 'No products yet — submit a category URL to start scraping'}
               </p>
