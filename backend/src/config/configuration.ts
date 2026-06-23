@@ -34,6 +34,7 @@ export default () => ({
 
   scraping: {
     maxConcurrentBrowsers: num('MAX_CONCURRENT_BROWSERS', 5),
+    workerConcurrency: num('WORKER_CONCURRENCY', 5),
     proxyServiceUrl: process.env.PROXY_SERVICE_URL || '',
     proxyApiKey: process.env.PROXY_API_KEY || '',
     requestDelayMin: num('REQUEST_DELAY_MIN_MS', 2000),
