@@ -68,9 +68,12 @@ function ProductCard({ p }: { p: Product }) {
         </h3>
         <p className="text-sm font-semibold">
           {p.price != null ? `${p.currency} ${p.price.toLocaleString()}` : 'Ask Price'}
+          {p.price != null && p.priceUnit && (
+            <span className="ml-1 text-[10px] font-normal text-muted-foreground">/ {p.priceUnit}</span>
+          )}
           {p.moq ? (
             <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-              / MOQ {p.moq}
+              MOQ {p.moq}
             </span>
           ) : null}
         </p>

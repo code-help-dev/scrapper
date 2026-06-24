@@ -184,6 +184,7 @@ export class ExtractionProcessor {
           subCategory: normalized.subCategory,
           price: normalized.price,
           currency: normalized.currency,
+          priceUnit: normalized.priceUnit,
           moq: normalized.moq,
           description: normalized.description,
           deliveryInformation: normalized.deliveryInformation,

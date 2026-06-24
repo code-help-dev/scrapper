@@ -47,6 +47,7 @@ export default function ProductDetailPage() {
             {product.price != null && (
               <span className="font-medium text-foreground">
                 {product.currency} {product.price.toLocaleString()}
+                {product.priceUnit && <span className="text-muted-foreground font-normal"> / {product.priceUnit}</span>}
                 {product.moq && <span className="text-muted-foreground font-normal"> (MOQ: {product.moq})</span>}
               </span>
             )}

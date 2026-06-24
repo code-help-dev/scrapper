@@ -77,6 +77,7 @@ export interface Product {
   subCategory: string;
   price: number | null;
   currency: string;
+  priceUnit: string;
   moq: number | null;
   description: string;
   deliveryInformation: string;

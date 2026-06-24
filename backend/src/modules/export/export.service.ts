@@ -64,7 +64,7 @@ export class ExportService {
   }
 
   private readonly CSV_BASE_COLUMNS = [
-    'id', 'productName', 'category', 'subCategory', 'price', 'currency',
+    'id', 'productName', 'category', 'subCategory', 'price', 'currency', 'priceUnit',
     'moq', 'description', 'deliveryInformation', 'warrantyInformation',
     'extractionStatus', 'isFlagged', 'sourcePlatform', 'sourceUrl', 'confidenceScore',
     'sellerName', 'sellerLogoUrl', 'sellerGstNumber', 'sellerAddress', 'sellerState',
@@ -91,6 +91,7 @@ export class ExportService {
         subCategory: p.subCategory,
         price: p.price,
         currency: p.currency,
+        priceUnit: (p as any).priceUnit ?? '',
         moq: p.moq,
         description: p.description,
         deliveryInformation: p.deliveryInformation ?? '',
@@ -136,6 +137,7 @@ export class ExportService {
       { header: 'Sub-Category', key: 'subCategory', width: 20 },
       { header: 'Price', key: 'price', width: 12 },
       { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'Price Unit', key: 'priceUnit', width: 18 },
       { header: 'MOQ', key: 'moq', width: 10 },
       { header: 'Description', key: 'description', width: 60 },
       { header: 'Delivery Info', key: 'deliveryInformation', width: 40 },
@@ -155,6 +157,7 @@ export class ExportService {
         subCategory: p.subCategory,
         price: p.price,
         currency: p.currency,
+        priceUnit: (p as any).priceUnit ?? '',
         moq: p.moq,
         description: p.description,
         deliveryInformation: p.deliveryInformation ?? '',
