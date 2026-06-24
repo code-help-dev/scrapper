@@ -52,6 +52,7 @@ export class Product {
   @Prop({ type: Types.ObjectId, ref: 'Category' }) categoryId?: Types.ObjectId;
   @Prop({ min: 0 }) price: number;
   @Prop({ default: 'INR' }) currency: string;
+  @Prop({ default: '' }) priceUnit: string;
   @Prop({ min: 1 }) moq: number;
   @Prop({ type: String }) description: string;
   @Prop({ type: String }) deliveryInformation: string;

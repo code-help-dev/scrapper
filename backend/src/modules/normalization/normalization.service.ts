@@ -118,6 +118,7 @@ export class NormalizationService implements OnModuleInit {
       subCategory: product.subCategory?.trim() ?? '',
       price,
       currency,
+      priceUnit: product.priceUnit?.trim() ?? '',
       specifications: this.normalizeSpecs(product.specifications),
     };
   }

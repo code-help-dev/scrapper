@@ -37,6 +37,7 @@ export interface ExtractedProduct {
   subCategory: string;
   price: number | null;
   currency: string;
+  priceUnit: string;
   moq: number | null;
   description: string;
   deliveryInformation: string;
@@ -82,6 +83,35 @@ export class ExtractorService {
     const numStr = raw.replace(/[₹$€,]/g, '').match(/[\d.]+/)?.[0];
     const price = numStr ? parseFloat(numStr) : null;
     return { price, currency };
+  }
+
+  private async extractPriceUnit(page: Page): Promise<string> {
+    try {
+      return await page.evaluate(() => {
+        const candidates = ['.new-price', '.product-price', '.price', '[class*="price"]'];
+        for (const sel of candidates) {
+          const el = document.querySelector(sel);
+          if (!el) continue;
+          // Normalise all whitespace to single spaces so multiline HTML doesn't fool us
+          const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+          const slashIdx = text.indexOf('/');
+          if (slashIdx === -1) continue;
+          const afterSlash = text.slice(slashIdx + 1).trim();
+          // Stop at known stop-phrase that Aajjo appends ("Get Latest Price", "Buy Now", …)
+          const cleaned = afterSlash
+            .replace(/\b(Get|Buy|Contact|Request|View|Call|Ask)\b.*/i, '')
+            .trim();
+          const words = cleaned
+            .split(/\s+/)
+            .filter((w: string) => /^[A-Za-z]/.test(w))
+            .slice(0, 4);
+          if (words.length > 0) return words.join(' ');
+        }
+        return '';
+      });
+    } catch {
+      return '';
+    }
   }
 
   private async extractMoq(page: Page): Promise<number | null> {
@@ -329,7 +359,10 @@ export class ExtractorService {
           if (/^H[1-4]$/.test(el.tagName)) return true;
           const id = (el.id ?? '').toLowerCase();
           const cls = (el.className ?? '').toLowerCase();
-          return id.includes('company') || cls.includes('company') || id === 'description' || id === 'productdescription';
+          if (id.includes('company') || cls.includes('company') || id === 'description' || id === 'productdescription') return true;
+          // Any container with 3+ tables is a product-listing section, not a spec section
+          if (el.querySelectorAll('table').length > 2) return true;
+          return false;
         };
 
         const specSectionIds = ['Specification', 'TechnicalSpecification', 'technical-specification'];
@@ -356,15 +389,24 @@ export class ExtractorService {
             return true;
           });
           if (tablesInside.length > 0) {
-            tablesInside.forEach((t) => readTable(t, 'extended'));
+            // Only read the FIRST extended table — subsequent tables are usually
+            // specs from other sellers/products aggregated on the same Aajjo page
+            readTable(tablesInside[0], 'extended');
             break;
           }
 
           let node: Element | null = section.nextElementSibling;
           let guard = 0;
           while (node && guard < 8 && !isStopNode(node)) {
-            if (node.tagName === 'TABLE') readTable(node, 'extended');
-            else node.querySelectorAll('table').forEach((t) => readTable(t, 'extended'));
+            if (node.tagName === 'TABLE') {
+              readTable(node, 'extended');
+              break; // stop after first table found while walking siblings
+            }
+            const firstTable = node.querySelector('table');
+            if (firstTable) {
+              readTable(firstTable, 'extended');
+              break;
+            }
             node = node.nextElementSibling;
             guard++;
           }
@@ -391,9 +433,10 @@ export class ExtractorService {
       for (const { key, val, section } of rows) {
         if (!key || !val || key.length > 80) continue;
         const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        const dedupeKey = `${normKey}::${val}`;
-        if (seen.has(dedupeKey)) continue;
-        seen.add(dedupeKey);
+        // Key-only dedup: first occurrence wins.
+        // Prevents duplicate keys from other sellers' spec tables on the same page.
+        if (seen.has(normKey)) continue;
+        seen.add(normKey);
         specs.push({ name: normKey, value: val, rawName: key, section, confidence: 90 });
       }
     } catch (e: any) {
@@ -679,10 +722,11 @@ export class ExtractorService {
     
     await this.expandSpecifications(page);
 
-    const [nameResult, priceResult, description, deliveryResult, warrantyResult] =
+    const [nameResult, priceResult, priceUnit, description, deliveryResult, warrantyResult] =
       await Promise.all([
         this.trySelectors(page, SELECTORS.productName),
         this.trySelectors(page, SELECTORS.price),
+        this.extractPriceUnit(page),
         this.extractDescription(page),
         this.trySelectors(page, SELECTORS.deliveryInfo),
         this.trySelectors(page, SELECTORS.warrantyInfo),
@@ -704,6 +748,7 @@ export class ExtractorService {
       subCategory: breadcrumb.subCategory,
       price,
       currency,
+      priceUnit,
       moq,
       description,
       deliveryInformation: deliveryResult.value,
