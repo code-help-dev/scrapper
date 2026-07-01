@@ -38,8 +38,12 @@ export class ExportService {
     fs.mkdirSync(this.storagePath, { recursive: true });
   }
 
+  private static escapeRegExp(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   private async queryProducts(filters: ExportFilters): Promise<ProductDocument[]> {
-    
+
     if (filters.productIds?.length) {
       const ids = filters.productIds
         .filter((id) => Types.ObjectId.isValid(id))
@@ -51,9 +55,9 @@ export class ExportService {
     }
 
     const query: Record<string, unknown> = { extractionStatus: 'completed' };
-    if (filters.category) query.category = { $regex: `^${filters.category}$`, $options: 'i' };
-    if (filters.subCategory) query.subCategory = { $regex: `^${filters.subCategory}$`, $options: 'i' };
-    if (filters.seller) query['seller.sellerName'] = { $regex: `^${filters.seller}$`, $options: 'i' };
+    if (filters.category) query.category = { $regex: `^${ExportService.escapeRegExp(filters.category)}$`, $options: 'i' };
+    if (filters.subCategory) query.subCategory = { $regex: `^${ExportService.escapeRegExp(filters.subCategory)}$`, $options: 'i' };
+    if (filters.seller) query['seller.sellerName'] = { $regex: `^${ExportService.escapeRegExp(filters.seller)}$`, $options: 'i' };
     if (filters.status) query.extractionStatus = filters.status;
     if (filters.dateFrom || filters.dateTo) {
       query.createdAt = {};
@@ -63,204 +67,197 @@ export class ExportService {
     return this.productModel.find(query).lean().exec() as unknown as Promise<ProductDocument[]>;
   }
 
-  private readonly CSV_BASE_COLUMNS = [
-    'id', 'productName', 'category', 'subCategory', 'price', 'currency', 'priceUnit',
-    'moq', 'description', 'deliveryInformation', 'warrantyInformation',
-    'extractionStatus', 'isFlagged', 'sourcePlatform', 'sourceUrl', 'confidenceScore',
-    'sellerName', 'sellerLogoUrl', 'sellerGstNumber', 'sellerAddress', 'sellerState',
-    'sellerCountry', 'sellerBusinessType', 'sellerYearsEstablished', 'sellerEmployees',
-    'sellerTurnover', 'sellerLegalStatus', 'sellerContact', 'sellerProfileUrl',
-    'imageUrls', 'thumbnailUrls',
-  ];
+  private static readonly NAMED_ENTITIES: Record<string, string> = {
+    amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ',
+    rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
+    mdash: '—', ndash: '–', hellip: '…',
+  };
 
-  private generateCsv(products: ProductDocument[]): Buffer {
-    if (!products.length) {
-      return Buffer.from(this.CSV_BASE_COLUMNS.join(',') + '\n', 'utf-8');
+  // Aajjo listing pages occasionally double-encode entities (e.g. "40&quot;"
+  // literally in the DOM text), so decode on export regardless of source.
+  private static decodeEntities(str: string): string {
+    if (!str || !str.includes('&')) return str ?? '';
+    return str.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, ent: string) => {
+      if (ent[0] === '#') {
+        const code = ent[1] === 'x' || ent[1] === 'X' ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      }
+      return ExportService.NAMED_ENTITIES[ent] ?? match;
+    });
+  }
+
+  // field-mapping.yaml mixes camelCase ("countryOfOrigin") with the
+  // extractor's own snake_case fallback — normalize both to snake_case here
+  // so exported spec keys are consistent regardless of source.
+  private static toSnakeCase(name: string): string {
+    return name
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  private static parseDescription(raw: string): {
+    summary: string;
+    key_features: Record<string, string>;
+    applications: string;
+    benefits: string;
+    call_to_action: string;
+  } {
+    const text = ExportService.decodeEntities(raw ?? '').trim();
+    if (!text) {
+      return { summary: '', key_features: {}, applications: '', benefits: '', call_to_action: '' };
     }
 
-    const rows = products.map((p) => {
-      const s = (p.seller as any) ?? {};
-      const specFlat: Record<string, string> = {};
-      (p.specifications ?? []).forEach((spec: any) => {
-        specFlat[`spec_${spec.name}`] = spec.value;
-      });
-      return {
-        id: (p as any)._id.toString(),
-        productName: p.productName,
-        category: p.category,
-        subCategory: p.subCategory,
-        price: p.price,
-        currency: p.currency,
-        priceUnit: (p as any).priceUnit ?? '',
-        moq: p.moq,
-        description: p.description,
-        deliveryInformation: p.deliveryInformation ?? '',
-        warrantyInformation: p.warrantyInformation ?? '',
-        extractionStatus: p.extractionStatus,
-        isFlagged: p.isFlagged,
-        sourcePlatform: p.sourcePlatform ?? '',
-        sourceUrl: p.sourceUrl,
-        confidenceScore: p.confidenceScore,
-        sellerName: s.sellerName ?? '',
-        sellerLogoUrl: s.sellerLogoUrl ?? '',
-        sellerGstNumber: s.gstNumber ?? '',
-        sellerAddress: s.address ?? '',
-        sellerState: s.state ?? '',
-        sellerCountry: s.country ?? '',
-        sellerBusinessType: s.businessType ?? '',
-        sellerYearsEstablished: s.yearsEstablished ?? '',
-        sellerEmployees: s.numberOfEmployees ?? '',
-        sellerTurnover: s.turnover ?? '',
-        sellerLegalStatus: s.legalStatus ?? '',
-        sellerContact: s.contactDetails ?? '',
-        sellerProfileUrl: s.aajjoProfileUrl ?? '',
-        imageUrls: (p.images ?? []).map((i: any) => i.storageUrl).join('|'),
-        thumbnailUrls: (p.images ?? []).map((i: any) => i.thumbnailUrl).join('|'),
-        ...specFlat,
-      };
+    const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    const findIdx = (label: string) =>
+      paragraphs.findIndex((p) => p.toLowerCase().startsWith(label.toLowerCase()));
+
+    const kfIdx = findIdx('Key Features:');
+    const appIdx = findIdx('Applications:');
+    const whyIdx = findIdx('Why Choose This Product:');
+
+    if (kfIdx === -1 && appIdx === -1 && whyIdx === -1) {
+      return { summary: text, key_features: {}, applications: '', benefits: '', call_to_action: '' };
+    }
+
+    const stripLabel = (p: string, label: string) => p.slice(label.length).trim();
+    const markerIdxs = [kfIdx, appIdx, whyIdx].filter((i) => i >= 0).sort((a, b) => a - b);
+    const summary = paragraphs.slice(0, markerIdxs[0]).join('\n\n');
+
+    const key_features: Record<string, string> = {};
+    if (kfIdx >= 0) {
+      stripLabel(paragraphs[kfIdx], 'Key Features:')
+        .split(',')
+        .forEach((pair) => {
+          const idx = pair.indexOf(':');
+          if (idx === -1) return;
+          const label = pair.slice(0, idx).trim();
+          const value = pair.slice(idx + 1).trim();
+          if (label) key_features[ExportService.toSnakeCase(label)] = value;
+        });
+    }
+
+    const applications = appIdx >= 0 ? stripLabel(paragraphs[appIdx], 'Applications:') : '';
+    const benefits = whyIdx >= 0 ? stripLabel(paragraphs[whyIdx], 'Why Choose This Product:') : '';
+    const call_to_action = paragraphs.slice(markerIdxs[markerIdxs.length - 1] + 1).join('\n\n');
+
+    return { summary, key_features, applications, benefits, call_to_action };
+  }
+
+  private buildRecord(p: ProductDocument) {
+    const s = (p.seller as any) ?? {};
+    const specifications: Record<string, string> = {};
+    (p.specifications ?? []).forEach((spec: any) => {
+      const key = ExportService.toSnakeCase(spec.name ?? spec.rawName ?? '');
+      if (!key) return;
+      specifications[key] = ExportService.decodeEntities(spec.value ?? '');
     });
 
-    const output = stringify(rows, { header: true });
+    return {
+      product_name: ExportService.decodeEntities(p.productName ?? ''),
+      confidence: `${p.confidenceScore ?? 0}%`,
+      status: p.extractionStatus,
+      price: { amount: p.price ?? null, currency: p.currency ?? 'INR' },
+      priceUnit: (p as any).priceUnit ?? '',
+      category: {
+        category: p.category ?? '',
+        sub_category: p.subCategory ?? '',
+      },
+      seller: {
+        name: ExportService.decodeEntities(s.sellerName ?? ''),
+        address: ExportService.decodeEntities(s.address ?? ''),
+        view_on_india_mart: Boolean(s.aajjoProfileUrl),
+        gst_number: s.gstNumber ?? '',
+      },
+      images: (p.images ?? []).map((i: any) => i.storageUrl).filter(Boolean),
+      specifications,
+      description: ExportService.parseDescription(p.description ?? ''),
+    };
+  }
+
+  private static flatten(value: unknown, prefix: string, out: Record<string, string>): void {
+    if (value === null || value === undefined) {
+      out[prefix] = '';
+    } else if (Array.isArray(value)) {
+      out[prefix] = value.join('|');
+    } else if (typeof value === 'object') {
+      Object.entries(value as Record<string, unknown>).forEach(([k, v]) =>
+        ExportService.flatten(v, prefix ? `${prefix}.${k}` : k, out),
+      );
+    } else {
+      out[prefix] = String(value);
+    }
+  }
+
+  // specifications and key_features vary per category (a machine and a membrane
+  // share almost no attribute names) — exploding them into columns produces
+  // thousands of mostly-empty columns across a multi-category export, so they're
+  // kept as single JSON cells instead. Everything else flattens to real columns.
+  private static readonly FLAT_COLUMNS = [
+    'product_name', 'confidence', 'status',
+    'price.amount', 'price.currency', 'priceUnit',
+    'category.category', 'category.sub_category',
+    'seller.name', 'seller.address', 'seller.view_on_india_mart', 'seller.gst_number',
+    'images',
+    'description.summary', 'description.applications', 'description.benefits',
+    'description.call_to_action', 'description.key_features',
+    'specifications',
+  ];
+
+  private buildFlatRows(products: ProductDocument[]): { columns: string[]; rows: Record<string, string>[] } {
+    const columns = [...ExportService.FLAT_COLUMNS];
+    const rows = products.map((p) => {
+      const record = this.buildRecord(p) as any;
+      const flatSource = {
+        ...record,
+        specifications: JSON.stringify(record.specifications ?? {}),
+        description: {
+          ...record.description,
+          key_features: JSON.stringify(record.description?.key_features ?? {}),
+        },
+      };
+      const out: Record<string, string> = {};
+      ExportService.flatten(flatSource, '', out);
+      const row: Record<string, string> = {};
+      columns.forEach((c) => { row[c] = out[c] ?? ''; });
+      return row;
+    });
+
+    return { columns, rows };
+  }
+
+  private generateCsv(products: ProductDocument[]): Buffer {
+    const { columns, rows } = this.buildFlatRows(products);
+    if (!rows.length) {
+      return Buffer.from(columns.join(',') + '\n', 'utf-8');
+    }
+    const output = stringify(rows, { header: true, columns });
     return Buffer.from(output, 'utf-8');
   }
 
   private async generateExcel(products: ProductDocument[]): Promise<Buffer> {
+    const { columns, rows } = this.buildFlatRows(products);
+
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Aajjo Scraper';
     wb.created = new Date();
 
-    const ws1 = wb.addWorksheet('Products');
-    ws1.columns = [
-      { header: 'ID', key: 'id', width: 26 },
-      { header: 'Product Name', key: 'productName', width: 40 },
-      { header: 'Category', key: 'category', width: 20 },
-      { header: 'Sub-Category', key: 'subCategory', width: 20 },
-      { header: 'Price', key: 'price', width: 12 },
-      { header: 'Currency', key: 'currency', width: 10 },
-      { header: 'Price Unit', key: 'priceUnit', width: 18 },
-      { header: 'MOQ', key: 'moq', width: 10 },
-      { header: 'Description', key: 'description', width: 60 },
-      { header: 'Delivery Info', key: 'deliveryInformation', width: 40 },
-      { header: 'Warranty Info', key: 'warrantyInformation', width: 40 },
-      { header: 'Extraction Status', key: 'extractionStatus', width: 18 },
-      { header: 'Flagged', key: 'isFlagged', width: 10 },
-      { header: 'Source Platform', key: 'sourcePlatform', width: 16 },
-      { header: 'Source URL', key: 'sourceUrl', width: 60 },
-      { header: 'Confidence', key: 'confidenceScore', width: 12 },
-    ];
-    ws1.getRow(1).font = { bold: true };
-    products.forEach((p) =>
-      ws1.addRow({
-        id: (p as any)._id.toString(),
-        productName: p.productName,
-        category: p.category,
-        subCategory: p.subCategory,
-        price: p.price,
-        currency: p.currency,
-        priceUnit: (p as any).priceUnit ?? '',
-        moq: p.moq,
-        description: p.description,
-        deliveryInformation: p.deliveryInformation ?? '',
-        warrantyInformation: p.warrantyInformation ?? '',
-        extractionStatus: p.extractionStatus,
-        isFlagged: p.isFlagged,
-        sourcePlatform: p.sourcePlatform ?? '',
-        sourceUrl: p.sourceUrl,
-        confidenceScore: p.confidenceScore,
-      }),
-    );
-
-    const ws2 = wb.addWorksheet('Specifications');
-    ws2.columns = [
-      { header: 'Product ID', key: 'productId', width: 26 },
-      { header: 'Section', key: 'section', width: 12 },
-      { header: 'Name', key: 'name', width: 30 },
-      { header: 'Raw Name', key: 'rawName', width: 30 },
-      { header: 'Value', key: 'value', width: 40 },
-      { header: 'Confidence', key: 'confidence', width: 12 },
-    ];
-    ws2.getRow(1).font = { bold: true };
-    products.forEach((p) =>
-      (p.specifications ?? []).forEach((s: any) =>
-        ws2.addRow({
-          productId: (p as any)._id.toString(),
-          section: s.section,
-          name: s.name,
-          rawName: s.rawName,
-          value: s.value,
-          confidence: s.confidence,
-        }),
-      ),
-    );
-
-    const ws3 = wb.addWorksheet('Images');
-    ws3.columns = [
-      { header: 'Product ID', key: 'productId', width: 26 },
-      { header: 'Storage URL', key: 'storageUrl', width: 80 },
-      { header: 'Thumbnail URL', key: 'thumbnailUrl', width: 80 },
-      { header: 'Featured', key: 'isFeatured', width: 10 },
-      { header: 'Width', key: 'width', width: 8 },
-      { header: 'Height', key: 'height', width: 8 },
-      { header: 'Format', key: 'format', width: 10 },
-    ];
-    ws3.getRow(1).font = { bold: true };
-    products.forEach((p) =>
-      (p.images ?? []).forEach((i: any) =>
-        ws3.addRow({
-          productId: (p as any)._id.toString(),
-          storageUrl: i.storageUrl,
-          thumbnailUrl: i.thumbnailUrl,
-          isFeatured: i.isFeatured,
-          width: i.width,
-          height: i.height,
-          format: i.format,
-        }),
-      ),
-    );
-
-    const ws4 = wb.addWorksheet('Sellers');
-    ws4.columns = [
-      { header: 'Product ID', key: 'productId', width: 26 },
-      { header: 'Seller Name', key: 'sellerName', width: 30 },
-      { header: 'Logo URL', key: 'sellerLogoUrl', width: 60 },
-      { header: 'GST', key: 'gstNumber', width: 20 },
-      { header: 'Address', key: 'address', width: 50 },
-      { header: 'State', key: 'state', width: 20 },
-      { header: 'Country', key: 'country', width: 15 },
-      { header: 'Business Type', key: 'businessType', width: 20 },
-      { header: 'Years Established', key: 'yearsEstablished', width: 18 },
-      { header: 'Employees', key: 'numberOfEmployees', width: 15 },
-      { header: 'Turnover', key: 'turnover', width: 20 },
-      { header: 'Legal Status', key: 'legalStatus', width: 20 },
-      { header: 'Contact', key: 'contactDetails', width: 30 },
-      { header: 'Aajjo Profile URL', key: 'aajjoProfileUrl', width: 60 },
-    ];
-    ws4.getRow(1).font = { bold: true };
-    products.forEach((p) => {
-      const s = p.seller as any;
-      ws4.addRow({
-        productId: (p as any)._id.toString(),
-        sellerName: s?.sellerName ?? '',
-        sellerLogoUrl: s?.sellerLogoUrl ?? '',
-        gstNumber: s?.gstNumber ?? '',
-        address: s?.address ?? '',
-        state: s?.state ?? '',
-        country: s?.country ?? '',
-        businessType: s?.businessType ?? '',
-        yearsEstablished: s?.yearsEstablished ?? '',
-        numberOfEmployees: s?.numberOfEmployees ?? '',
-        turnover: s?.turnover ?? '',
-        legalStatus: s?.legalStatus ?? '',
-        contactDetails: s?.contactDetails ?? '',
-        aajjoProfileUrl: s?.aajjoProfileUrl ?? '',
-      });
-    });
+    const ws = wb.addWorksheet('Products');
+    ws.columns = columns.map((c) => ({
+      header: c,
+      key: c,
+      width: Math.min(Math.max(c.length + 4, 14), 60),
+    }));
+    ws.getRow(1).font = { bold: true };
+    rows.forEach((row) => ws.addRow(row));
 
     return wb.xlsx.writeBuffer() as unknown as Promise<Buffer>;
   }
 
   private generateJson(products: ProductDocument[]): Buffer {
-    return Buffer.from(JSON.stringify(products, null, 2), 'utf-8');
+    const records = products.map((p) => this.buildRecord(p));
+    return Buffer.from(JSON.stringify(records, null, 2), 'utf-8');
   }
 
   private readonly SHOPIFY_COLUMNS = [
