@@ -80,8 +80,9 @@ export const SELECTORS = {
     'table.specification-chart-details',
   ],
 
-  mainImagePattern: 'ExtraLarge',
-  galleryImagePattern: 'Medium',
+  gallerySelector:
+    '.prdDet-sticky .img-showcase img[src], .prdDet-sticky .img-select .img-item img[src]',
+  gallerySelectorFallback: 'img[src*="ExtraLarge"], img[src*="/Large/"], img[src*="Medium"]',
 
   sellerLogoImg: [
     'img.ahataLgo',

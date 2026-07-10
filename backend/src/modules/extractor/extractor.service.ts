@@ -519,33 +519,24 @@ export class ExtractorService {
     const seen = new Set<string>();
 
     try {
-      const srcs = await page.evaluate(() => {
-        const allImgs = Array.from(document.querySelectorAll('img[src]')) as HTMLImageElement[];
-        return allImgs
-          .map((img) => ({
-            src: img.src,
-            isExtraLarge: img.src.includes('ExtraLarge'),
-            isMedium: img.src.includes('Medium'),
-            isLarge: img.src.includes('/Large/'),
-          }))
-          .filter((img) => img.isExtraLarge || img.isMedium || img.isLarge)
-          .sort((a, b) => (b.isExtraLarge ? 1 : 0) - (a.isExtraLarge ? 1 : 0));
-      });
+      const srcs = await page.evaluate((selector) => {
+        const imgs = Array.from(document.querySelectorAll<HTMLImageElement>(selector));
+        return imgs.map((img) => img.src.replace('/small/', '/ExtraLarge/'));
+      }, SELECTORS.gallerySelector);
 
-      for (const img of srcs) {
-        if (seen.has(img.src)) continue;
-        seen.add(img.src);
-        images.push({ originalUrl: img.src, isFeatured: img.isExtraLarge && images.length === 0 });
+      for (const src of srcs) {
+        if (seen.has(src)) continue;
+        seen.add(src);
+        images.push({ originalUrl: src, isFeatured: images.length === 0 });
         if (images.length >= 5) break;
       }
 
       if (!images.length) {
-        const fallback = await page.evaluate(() =>
-          (Array.from(document.querySelectorAll('img[src]')) as HTMLImageElement[])
+        const fallback = await page.evaluate((selector) =>
+          (Array.from(document.querySelectorAll<HTMLImageElement>(selector)))
             .map((img) => img.src)
-            .filter((src) => src.startsWith('http') && (src.endsWith('.jpg') || src.endsWith('.png') || src.endsWith('.webp')))
             .slice(0, 5),
-        );
+        SELECTORS.gallerySelectorFallback);
         fallback.forEach((src, i) => images.push({ originalUrl: src, isFeatured: i === 0 }));
       }
     } catch (e: any) {
