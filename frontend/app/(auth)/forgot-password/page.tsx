@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import Link from 'next/link';
+import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,11 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  newPassword: z.string().min(6, 'Password must be at least 6 characters'),
 });
 type FormData = z.infer<typeof schema>;
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -29,18 +29,16 @@ export default function LoginPage() {
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
-    const result = await signIn('credentials', {
-      email: data.email,
-      password: data.password,
-      redirect: false,
-    });
-    setLoading(false);
-
-    if (result?.error) {
-      toast.error('Invalid email or password');
-    } else {
-      toast.success('Logged in');
-      router.replace('/stats');
+    try {
+      await authApi.forgotPassword(data.email, data.newPassword);
+      toast.success('Password updated — you can now sign in');
+      router.replace('/login');
+    } catch (e: any) {
+      const raw = e?.response?.data?.message;
+      const msg = Array.isArray(raw) ? raw.join('; ') : (raw ?? 'Failed to update password');
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,8 +46,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Aajjo Scraper</CardTitle>
-          <CardDescription>Sign in to the EB2BMART admin dashboard</CardDescription>
+          <CardTitle className="text-2xl font-bold">Reset password</CardTitle>
+          <CardDescription>Enter your email and a new password — no verification needed</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -59,19 +57,19 @@ export default function LoginPage() {
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="••••••••" {...register('password')} />
-              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+              <Label htmlFor="newPassword">New password</Label>
+              <Input id="newPassword" type="password" placeholder="••••••••" {...register('newPassword')} />
+              {errors.newPassword && <p className="text-xs text-destructive">{errors.newPassword.message}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Sign in
+              Update password
             </Button>
           </form>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-4">
-            <Link href="/register" className="underline underline-offset-2">Create account</Link>
-            <Link href="/forgot-password" className="underline underline-offset-2">Forgot password?</Link>
-          </div>
+          <p className="text-xs text-muted-foreground text-center mt-4">
+            Remembered it?{' '}
+            <Link href="/login" className="underline underline-offset-2">Sign in</Link>
+          </p>
         </CardContent>
       </Card>
     </div>

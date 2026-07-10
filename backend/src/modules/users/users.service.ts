@@ -69,4 +69,12 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
+
+  async updatePasswordByEmail(email: string, newPassword: string): Promise<void> {
+    const user = await this.findByEmail(email);
+    if (!user) throw new NotFoundException('No user found with that email');
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.userModel.findByIdAndUpdate(user.id, { passwordHash }).exec();
+  }
 }

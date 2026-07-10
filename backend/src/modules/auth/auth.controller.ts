@@ -18,6 +18,7 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -36,16 +37,21 @@ export class AuthController {
   }
 
   @Post('register')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Register user — free for first user; admin-only after that',
+    summary: 'Register user — public, no auth required',
   })
-  async register(@Body() dto: RegisterDto, @Request() req: any) {
-    
-    const role = req.user?.role;
-    const user = await this.authService.register(dto, role);
+  async register(@Body() dto: RegisterDto) {
+    const user = await this.authService.register(dto);
     return { id: user.id, email: user.email, role: user.role };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset password — public, no verification required; provide email + new password',
+  })
+  async forgotPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Post('refresh')

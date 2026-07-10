@@ -1,13 +1,10 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { UserDocument } from '../database/schemas/user.schema';
 import { RegisterDto } from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
@@ -53,14 +50,8 @@ export class AuthService {
     };
   }
 
-  async register(dto: RegisterDto, requestingUserRole?: UserRole) {
-    const totalUsers = await this.usersService.countAll();
-
-    if (totalUsers > 0 && requestingUserRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only admins can register new users');
-    }
-
-    const role = totalUsers === 0 ? UserRole.ADMIN : (dto.role ?? UserRole.OPERATOR);
+  async register(dto: RegisterDto) {
+    const role = dto.role ?? UserRole.OPERATOR;
     const user = await this.usersService.create(dto.email, dto.password, role);
     this.dynamicQueueService.createQueueForUser(user.id);
     return user;
@@ -83,5 +74,10 @@ export class AuthService {
 
   async logout(userId: string) {
     await this.usersService.updateRefreshToken(userId, null);
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    await this.usersService.updatePasswordByEmail(dto.email, dto.newPassword);
+    return { message: 'Password updated successfully' };
   }
 }
