@@ -175,6 +175,12 @@ export class ExtractionProcessor {
       .update(`${normalized.productName}::${sourceUrl}`)
       .digest('hex');
 
+    // Resolve (and upload, if not already hosted) the seller's logo before saving
+    // so the product is written once with the final S3 URL rather than the raw
+    // external one.
+    const logoUrl = await this.sellersService.upsertFromProduct(normalized.seller);
+    const seller = { ...normalized.seller, sellerLogoUrl: logoUrl };
+
     const savedProduct = await this.productModel.findOneAndUpdate(
       { sourceUrl },
       {
@@ -190,7 +196,7 @@ export class ExtractionProcessor {
           deliveryInformation: normalized.deliveryInformation,
           warrantyInformation: normalized.warrantyInformation,
           specifications: normalized.specifications,
-          seller: normalized.seller,
+          seller,
           images: normalized.images.map((img) => ({
             originalUrl: img.originalUrl,
             isFeatured: img.isFeatured,
@@ -213,8 +219,6 @@ export class ExtractionProcessor {
     this.logger.log(
       `[${jobId}] Saved "${normalized.productName}" — confidence: ${normalized.confidenceScore}%`,
     );
-
-    await this.sellersService.upsertFromProduct(normalized.seller);
 
     if (normalized.subCategory) {
       try {

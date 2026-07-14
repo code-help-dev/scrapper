@@ -53,6 +53,20 @@ export interface ExtractedProduct {
 export class ExtractorService {
   private readonly logger = new Logger(ExtractorService.name);
 
+  // Row keys that identify a seller/company profile table (GST, turnover, etc.)
+  // so it isn't mistaken for a product specification table when Aajjo renders it
+  // without the usual #CompanyDetails wrapper.
+  private static readonly SELLER_PROFILE_KEYS = [
+    'gst number',
+    'gst no',
+    'year of establishment',
+    'nature of business',
+    'number of employees',
+    'turnover',
+    'annual turnover',
+    'legal status',
+  ];
+
   private async trySelectors(
     page: Page,
     selectors: string[],
@@ -323,8 +337,20 @@ export class ExtractorService {
     const seen = new Set<string>();
 
     try {
-      const rows = await page.evaluate(() => {
+      const rows = await page.evaluate((sellerKeys: string[]) => {
         const out: { key: string; val: string; section: 'basic' | 'extended' }[] = [];
+
+        const isSellerInfoTable = (table: Element): boolean => {
+          const keys = Array.from(table.querySelectorAll('tr'))
+            .map((tr) => {
+              const td = tr.querySelectorAll('td');
+              return td.length >= 2 ? (td[0].textContent ?? '').trim().toLowerCase() : '';
+            })
+            .filter(Boolean);
+          if (keys.length === 0) return false;
+          const matches = keys.filter((k) => sellerKeys.some((sk) => k.includes(sk))).length;
+          return matches / keys.length >= 0.5;
+        };
 
         const readTable = (table: Element | null | undefined, section: 'basic' | 'extended') => {
           if (!table) return;
@@ -384,8 +410,9 @@ export class ExtractorService {
             
             const cls = (t as HTMLElement).className ?? '';
             if (cls.includes('service-chart-datails') || cls.includes('service-chart-details')) return false;
-            
+
             if (isAfterBoundary(t)) return false;
+            if (isSellerInfoTable(t)) return false;
             return true;
           });
           if (tablesInside.length > 0) {
@@ -399,12 +426,12 @@ export class ExtractorService {
           let guard = 0;
           while (node && guard < 8 && !isStopNode(node)) {
             if (node.tagName === 'TABLE') {
-              readTable(node, 'extended');
+              if (!isSellerInfoTable(node)) readTable(node, 'extended');
               break; // stop after first table found while walking siblings
             }
             const firstTable = node.querySelector('table');
             if (firstTable) {
-              readTable(firstTable, 'extended');
+              if (!isSellerInfoTable(firstTable)) readTable(firstTable, 'extended');
               break;
             }
             node = node.nextElementSibling;
@@ -423,12 +450,12 @@ export class ExtractorService {
                 if (parent.id === 'CompanyDetails') { inCompany = true; break; }
                 parent = parent.parentElement;
               }
-              if (!inCompany) readTable(t, 'extended');
+              if (!inCompany && !isSellerInfoTable(t)) readTable(t, 'extended');
             });
         }
 
         return out;
-      });
+      }, ExtractorService.SELLER_PROFILE_KEYS);
 
       for (const { key, val, section } of rows) {
         if (!key || !val || key.length > 80) continue;
@@ -548,8 +575,8 @@ export class ExtractorService {
 
   private async extractSeller(page: Page): Promise<SellerData> {
     try {
-      const r = await page.evaluate(() => {
-        
+      const r = await page.evaluate((sellerKeys: string[]) => {
+
         let jldSellerName = '';
         let jldProfileUrl = '';
         let jldAddress = '';
@@ -601,6 +628,25 @@ export class ExtractorService {
           }
         }
 
+        if (!table) {
+          // Some listings inline the seller/company profile table without a
+          // #CompanyDetails wrapper — recover it by matching its row keys instead.
+          const candidates = Array.from(
+            document.querySelectorAll('table.specification-chart-datails, table.specification-chart-details'),
+          );
+          table = candidates.find((t) => {
+            const keys = Array.from(t.querySelectorAll('tr'))
+              .map((tr) => {
+                const td = tr.querySelectorAll('td');
+                return td.length >= 2 ? (td[0].textContent ?? '').trim().toLowerCase() : '';
+              })
+              .filter(Boolean);
+            if (keys.length === 0) return false;
+            const matches = keys.filter((k) => sellerKeys.some((sk) => k.includes(sk))).length;
+            return matches / keys.length >= 0.5;
+          }) ?? null;
+        }
+
         const rows: Record<string, string> = {};
         table?.querySelectorAll('tr').forEach((tr) => {
           const td = tr.querySelectorAll('td');
@@ -619,9 +665,14 @@ export class ExtractorService {
           gstSpan?.textContent?.match(/\b([0-9A-Z]{15})\b/)?.[1] ||
           '';
 
-        const logoDom = document.querySelector(
-          'img.detailLogo, img.ahataLgo, .logoWrapper img, img[class*="logo"]',
-        ) as HTMLImageElement | null;
+        // Tried in priority order — a single comma-separated selector would instead
+        // return whichever match appears first in the DOM, which can pick up an
+        // unrelated "logo"-classed image (e.g. a site badge) ahead of the real one.
+        const logoDom =
+          (document.querySelector('img.detailLogo') as HTMLImageElement | null) ??
+          (document.querySelector('img.ahataLgo') as HTMLImageElement | null) ??
+          (document.querySelector('.logoWrapper img') as HTMLImageElement | null) ??
+          (document.querySelector('img[class*="logo" i]') as HTMLImageElement | null);
         const logo = jldLogo || logoDom?.src || '';
 
         const contactFromRows =
@@ -644,7 +695,7 @@ export class ExtractorService {
           logo,
           contactDetails,
         };
-      });
+      }, ExtractorService.SELLER_PROFILE_KEYS);
 
       const yearStr = r.rows['year of establishment'] ?? '';
       const year = parseInt(yearStr.match(/\d{4}/)?.[0] ?? '', 10);

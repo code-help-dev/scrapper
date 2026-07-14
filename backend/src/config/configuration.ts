@@ -30,6 +30,7 @@ export default () => ({
     bucket: process.env.AWS_S3_BUCKET || 'eb2bmart-dev-bucket',
     cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || '',
     imagePrefix: process.env.S3_IMAGE_PREFIX || 'images',
+    logoPrefix: process.env.S3_LOGO_PREFIX || 'logos',
   },
 
   scraping: {

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Seller, SellerDocument } from '../database/schemas/seller.schema';
 import { SellerData } from '../extractor/extractor.service';
+import { ImageService } from '../image/image.service';
 
 @Injectable()
 export class SellersService {
@@ -11,17 +12,37 @@ export class SellersService {
   constructor(
     @InjectModel(Seller.name)
     private readonly sellerModel: Model<SellerDocument>,
+    private readonly imageService: ImageService,
   ) {}
 
-  async upsertFromProduct(seller: SellerData): Promise<void> {
-    if (!seller?.sellerName?.trim()) return;
+  // Returns the seller's logo URL as it should be stored on the product being
+  // saved — either the already-hosted S3 URL, or a freshly uploaded one.
+  private async resolveLogoUrl(sellerName: string, rawLogoUrl: string): Promise<string> {
+    if (!rawLogoUrl) return '';
+    if (this.imageService.isOwnStorageUrl(rawLogoUrl)) return rawLogoUrl;
+
+    const existing = await this.sellerModel.findOne({ sellerName }).lean().exec();
+    if (existing?.sellerLogoUrl && this.imageService.isOwnStorageUrl(existing.sellerLogoUrl)) {
+      return existing.sellerLogoUrl;
+    }
+
+    const slug = sellerName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'seller';
+    const uploaded = await this.imageService.processSellerLogo(rawLogoUrl, slug);
+    return uploaded?.storageUrl ?? rawLogoUrl;
+  }
+
+  async upsertFromProduct(seller: SellerData): Promise<string> {
+    if (!seller?.sellerName?.trim()) return '';
+
+    const sellerName = seller.sellerName.trim();
+    const logoUrl = await this.resolveLogoUrl(sellerName, seller.sellerLogoUrl ?? '');
 
     try {
       await this.sellerModel.findOneAndUpdate(
-        { sellerName: seller.sellerName.trim() },
+        { sellerName },
         {
           $set: {
-            sellerLogoUrl:    seller.sellerLogoUrl   ?? '',
+            sellerLogoUrl:    logoUrl,
             gstNumber:        seller.gstNumber       ?? '',
             address:          seller.address         ?? '',
             state:            seller.state           ?? '',
@@ -38,8 +59,10 @@ export class SellersService {
         { upsert: true, new: true },
       );
     } catch (err: any) {
-      this.logger.warn(`Seller upsert failed for "${seller.sellerName}": ${err.message}`);
+      this.logger.warn(`Seller upsert failed for "${sellerName}": ${err.message}`);
     }
+
+    return logoUrl;
   }
 
   async findAll(params: {
