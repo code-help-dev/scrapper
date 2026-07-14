@@ -180,8 +180,8 @@ export class ExtractionProcessor {
       {
         $set: {
           productName: normalized.productName,
-          category: normalized.category,
           subCategory: normalized.subCategory,
+          productType: normalized.productType,
           price: normalized.price,
           currency: normalized.currency,
           priceUnit: normalized.priceUnit,
@@ -216,9 +216,9 @@ export class ExtractionProcessor {
 
     await this.sellersService.upsertFromProduct(normalized.seller);
 
-    if (normalized.category) {
+    if (normalized.subCategory) {
       try {
-        const slug = normalized.category
+        const slug = normalized.subCategory
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
@@ -226,14 +226,14 @@ export class ExtractionProcessor {
         const cat = await this.categoryModel.findOneAndUpdate(
           { slug },
           {
-            $setOnInsert: { name: normalized.category, slug },
+            $setOnInsert: { name: normalized.subCategory, slug },
             $inc: { productCount: 1 },
           },
           { upsert: true, new: true },
         );
 
-        if (normalized.subCategory) {
-          const normalizedSubName = normalized.subCategory.trim();
+        if (normalized.productType) {
+          const normalizedSubName = normalized.productType.trim();
           const subSlug = normalizedSubName
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')

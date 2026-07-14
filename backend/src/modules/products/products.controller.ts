@@ -51,13 +51,13 @@ export class ProductsController {
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    const matchStage: Record<string, unknown> = { category: { $exists: true, $ne: '' } };
+    const matchStage: Record<string, unknown> = { subCategory: { $exists: true, $ne: '' } };
     if (user.role !== UserRole.ADMIN) matchStage.ownedBy = new Types.ObjectId(user.id);
 
     const result = await this.productModel
       .aggregate([
         { $match: matchStage },
-        { $group: { _id: '$category', productCount: { $sum: 1 } } },
+        { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
         { $sort: { productCount: -1 } },
         { $project: { _id: 0, name: '$_id', productCount: 1 } },
       ])
@@ -81,14 +81,14 @@ export class ProductsController {
     const cached = await this.cacheService.get<{ name: string; productCount: number }[]>(cacheKey);
     if (cached) return cached;
 
-    const matchStage: Record<string, unknown> = { subCategory: { $exists: true, $ne: '' } };
-    if (category) matchStage.category = { $regex: `^${category}$`, $options: 'i' };
+    const matchStage: Record<string, unknown> = { productType: { $exists: true, $ne: '' } };
+    if (category) matchStage.subCategory = { $regex: `^${category}$`, $options: 'i' };
     if (user.role !== UserRole.ADMIN) matchStage.ownedBy = new Types.ObjectId(user.id);
 
     const result = await this.productModel
       .aggregate([
         { $match: matchStage },
-        { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
+        { $group: { _id: '$productType', productCount: { $sum: 1 } } },
         { $sort: { productCount: -1 } },
         { $project: { _id: 0, name: '$_id', productCount: 1 } },
       ])
@@ -130,8 +130,8 @@ export class ProductsController {
     const filter: Record<string, unknown> = {};
     if (user.role !== UserRole.ADMIN) filter.ownedBy = new Types.ObjectId(user.id);
     if (status) filter.extractionStatus = status;
-    if (category) filter.category = { $regex: `^${category}$`, $options: 'i' };
-    if (subCategory) filter.subCategory = { $regex: `^${subCategory}$`, $options: 'i' };
+    if (category) filter.subCategory = { $regex: `^${category}$`, $options: 'i' };
+    if (subCategory) filter.productType = { $regex: `^${subCategory}$`, $options: 'i' };
     if (seller) filter['seller.sellerName'] = { $regex: seller, $options: 'i' };
     if (flagged !== undefined) filter.isFlagged = flagged === 'true';
     if (minConfidence) filter.confidenceScore = { $gte: Number(minConfidence) };

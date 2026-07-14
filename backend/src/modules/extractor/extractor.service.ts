@@ -33,8 +33,8 @@ export interface SellerData {
 
 export interface ExtractedProduct {
   productName: string;
-  category: string;
   subCategory: string;
+  productType: string;
   price: number | null;
   currency: string;
   priceUnit: string;
@@ -688,7 +688,7 @@ export class ExtractorService {
     const weights: { key: keyof ExtractedProduct; w: number }[] = [
       { key: 'productName', w: 20 },
       { key: 'price', w: 15 },
-      { key: 'category', w: 20 },
+      { key: 'subCategory', w: 20 },
       { key: 'specifications', w: 20 },
       { key: 'images', w: 10 },
       { key: 'seller', w: 10 },
@@ -735,8 +735,8 @@ export class ExtractorService {
 
     const product: ExtractedProduct = {
       productName: nameResult.value || 'Unknown Product',
-      category: breadcrumb.category,
-      subCategory: breadcrumb.subCategory,
+      subCategory: breadcrumb.category,
+      productType: breadcrumb.subCategory,
       price,
       currency,
       priceUnit,

@@ -47,8 +47,8 @@ export class Product {
   @Prop({ required: true, trim: true })
   productName: string;
 
-  @Prop({ trim: true }) category: string;
   @Prop({ trim: true }) subCategory: string;
+  @Prop({ trim: true }) productType: string;
   @Prop({ type: Types.ObjectId, ref: 'Category' }) categoryId?: Types.ObjectId;
   @Prop({ min: 0 }) price: number;
   @Prop({ default: 'INR' }) currency: string;
@@ -97,8 +97,8 @@ export const ProductSchema = SchemaFactory.createForClass(Product);
 
 ProductSchema.index({ ownedBy: 1 });
 ProductSchema.index({ extractionStatus: 1 });
-ProductSchema.index({ category: 1 });
-ProductSchema.index({ category: 1, subCategory: 1 });
+ProductSchema.index({ subCategory: 1 });
+ProductSchema.index({ subCategory: 1, productType: 1 });
 ProductSchema.index({ confidenceScore: 1 });
 ProductSchema.index({ isFlagged: 1 });
 ProductSchema.index({ createdAt: -1 });

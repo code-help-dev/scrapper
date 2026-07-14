@@ -73,8 +73,8 @@ export interface SellerInfo {
 export interface Product {
   _id: string;
   productName: string;
-  category: string;
   subCategory: string;
+  productType: string;
   price: number | null;
   currency: string;
   priceUnit: string;

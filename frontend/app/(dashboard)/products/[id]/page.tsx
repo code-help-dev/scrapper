@@ -43,7 +43,7 @@ export default function ProductDetailPage() {
             </Badge>
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-            <span>{product.category}{product.subCategory ? ` › ${product.subCategory}` : ''}</span>
+            <span>{product.subCategory}{product.productType ? ` › ${product.productType}` : ''}</span>
             {product.price != null && (
               <span className="font-medium text-foreground">
                 {product.currency} {product.price.toLocaleString()}
@@ -75,18 +75,18 @@ export default function ProductDetailPage() {
               <table className="w-full text-sm">
                 <tbody>
                   <tr className="bg-muted/30">
-                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Category</td>
+                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Sub-Category</td>
                     <td className="px-4 py-2.5">
-                      {product.category
-                        ? <span className="font-medium">{product.category}</span>
+                      {product.subCategory
+                        ? <span className="font-medium">{product.subCategory}</span>
                         : <span className="text-muted-foreground">—</span>}
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Sub-Category</td>
+                    <td className="px-4 py-2.5 font-medium w-36 text-muted-foreground">Product Type</td>
                     <td className="px-4 py-2.5">
-                      {product.subCategory
-                        ? product.subCategory
+                      {product.productType
+                        ? product.productType
                         : <span className="text-muted-foreground">—</span>}
                     </td>
                   </tr>

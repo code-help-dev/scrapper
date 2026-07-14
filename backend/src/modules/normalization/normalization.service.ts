@@ -114,8 +114,8 @@ export class NormalizationService implements OnModuleInit {
     return {
       ...product,
       productName: product.productName.trim(),
-      category: product.category?.trim() ?? '',
       subCategory: product.subCategory?.trim() ?? '',
+      productType: product.productType?.trim() ?? '',
       price,
       currency,
       priceUnit: product.priceUnit?.trim() ?? '',

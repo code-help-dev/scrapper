@@ -55,8 +55,8 @@ export class ExportService {
     }
 
     const query: Record<string, unknown> = { extractionStatus: 'completed' };
-    if (filters.category) query.category = { $regex: `^${ExportService.escapeRegExp(filters.category)}$`, $options: 'i' };
-    if (filters.subCategory) query.subCategory = { $regex: `^${ExportService.escapeRegExp(filters.subCategory)}$`, $options: 'i' };
+    if (filters.category) query.subCategory = { $regex: `^${ExportService.escapeRegExp(filters.category)}$`, $options: 'i' };
+    if (filters.subCategory) query.productType = { $regex: `^${ExportService.escapeRegExp(filters.subCategory)}$`, $options: 'i' };
     if (filters.seller) query['seller.sellerName'] = { $regex: `^${ExportService.escapeRegExp(filters.seller)}$`, $options: 'i' };
     if (filters.status) query.extractionStatus = filters.status;
     if (filters.dateFrom || filters.dateTo) {
@@ -156,18 +156,13 @@ export class ExportService {
 
     return {
       product_name: ExportService.decodeEntities(p.productName ?? ''),
-      confidence: `${p.confidenceScore ?? 0}%`,
-      status: p.extractionStatus,
       price: { amount: p.price ?? null, currency: p.currency ?? 'INR' },
       priceUnit: (p as any).priceUnit ?? '',
-      category: {
-        category: p.category ?? '',
-        sub_category: p.subCategory ?? '',
-      },
+      sub_category: p.subCategory ?? '',
+      product_type: p.productType ?? '',
       seller: {
         name: ExportService.decodeEntities(s.sellerName ?? ''),
         address: ExportService.decodeEntities(s.address ?? ''),
-        view_on_india_mart: Boolean(s.aajjoProfileUrl),
         gst_number: s.gstNumber ?? '',
       },
       images: (p.images ?? []).map((i: any) => i.storageUrl).filter(Boolean),
@@ -195,10 +190,10 @@ export class ExportService {
   // thousands of mostly-empty columns across a multi-category export, so they're
   // kept as single JSON cells instead. Everything else flattens to real columns.
   private static readonly FLAT_COLUMNS = [
-    'product_name', 'confidence', 'status',
+    'product_name',
     'price.amount', 'price.currency', 'priceUnit',
-    'category.category', 'category.sub_category',
-    'seller.name', 'seller.address', 'seller.view_on_india_mart', 'seller.gst_number',
+    'sub_category', 'product_type',
+    'seller.name', 'seller.address', 'seller.gst_number',
     'images',
     'description.summary', 'description.applications', 'description.benefits',
     'description.call_to_action', 'description.key_features',
@@ -290,8 +285,8 @@ export class ExportService {
         Title: p.productName,
         'Body (HTML)': p.description ?? '',
         Vendor: seller.sellerName ?? '',
-        'Product Category': p.category ?? '',
-        Type: p.subCategory ?? '',
+        'Product Category': p.subCategory ?? '',
+        Type: p.productType ?? '',
         Tags: tags,
         Published: 'false',
         'Variant Price': p.price ?? '',

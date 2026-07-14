@@ -91,10 +91,10 @@ export class SellersController {
       {
         $match: {
           'seller.sellerName': { $regex: `^${this.esc(sellerName)}$`, $options: 'i' },
-          category: { $exists: true, $ne: '' },
+          subCategory: { $exists: true, $ne: '' },
         },
       },
-      { $group: { _id: '$category', productCount: { $sum: 1 } } },
+      { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
       { $sort: { productCount: -1 } },
       { $project: { _id: 0, name: '$_id', productCount: 1 } },
     ]);
@@ -116,11 +116,11 @@ export class SellersController {
       {
         $match: {
           'seller.sellerName': { $regex: `^${this.esc(sellerName)}$`, $options: 'i' },
-          category: { $regex: `^${this.esc(category)}$`, $options: 'i' },
-          subCategory: { $exists: true, $ne: '' },
+          subCategory: { $regex: `^${this.esc(category)}$`, $options: 'i' },
+          productType: { $exists: true, $ne: '' },
         },
       },
-      { $group: { _id: '$subCategory', productCount: { $sum: 1 } } },
+      { $group: { _id: '$productType', productCount: { $sum: 1 } } },
       { $sort: { productCount: -1 } },
       { $project: { _id: 0, name: '$_id', productCount: 1 } },
     ]);
@@ -150,10 +150,10 @@ export class SellersController {
     const filter: Record<string, unknown> = {
       'seller.sellerName': { $regex: `^${this.esc(sellerName)}$`, $options: 'i' },
     };
-    if (category) filter.category = { $regex: `^${this.esc(category)}$`, $options: 'i' };
+    if (category) filter.subCategory = { $regex: `^${this.esc(category)}$`, $options: 'i' };
     if (subCategory) {
       const subs = subCategory.split(',').map((s) => s.trim()).filter(Boolean);
-      filter.subCategory = subs.length === 1
+      filter.productType = subs.length === 1
         ? { $regex: `^${this.esc(subs[0])}$`, $options: 'i' }
         : { $in: subs.map((s) => new RegExp(`^${this.esc(s)}$`, 'i')) };
     }
