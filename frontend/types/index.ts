@@ -10,6 +10,16 @@ export interface AuthUser {
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'retry' | 'paused';
 export type JobType = 'single' | 'bulk' | 'discovery';
 
+export interface RetryHistoryEntry {
+  attemptedAt: string;
+  initiatedBy: string | null;
+  previousStatus: JobStatus;
+  previousProcessedCount: number;
+  previousFailedCount: number;
+  previousTotalProducts: number;
+  previousErrorMessage: string | null;
+}
+
 export interface ExtractionJob {
   _id: string;
   sourceUrl: string;
@@ -29,6 +39,18 @@ export interface ExtractionJob {
   createdAt: string;
   updatedAt: string;
   bullState?: string;
+  retryCount: number;
+  lastRetriedAt: string | null;
+  lastRetriedBy: string | null;
+  retryHistory: RetryHistoryEntry[];
+  hasFlaggedProduct?: boolean;
+}
+
+export interface BulkActionResult {
+  requested: number;
+  deleted?: number;
+  retried?: number;
+  failed: { id: string; reason: string }[];
 }
 
 export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed';

@@ -15,7 +15,7 @@ import {
 import { Product, ProductDocument } from '../../database/schemas/product.schema';
 import { Category, CategoryDocument } from '../../database/schemas/category.schema';
 import { JobStatus, JobType } from '../../../common/enums/job-status.enum';
-import { ExtractionStatus } from '../../../common/enums/extraction-status.enum';
+import { ExtractionStatus, FLAG_CONFIDENCE_THRESHOLD } from '../../../common/enums/extraction-status.enum';
 import { ScraperService } from '../../scraper/scraper.service';
 import { ExtractorService } from '../../extractor/extractor.service';
 import { NormalizationService } from '../../normalization/normalization.service';
@@ -207,7 +207,7 @@ export class ExtractionProcessor {
           })),
           extractionStatus: ExtractionStatus.COMPLETED,
           confidenceScore: normalized.confidenceScore,
-          isFlagged: normalized.confidenceScore < 70,
+          isFlagged: normalized.confidenceScore < FLAG_CONFIDENCE_THRESHOLD,
           contentHash,
           sourcePlatform: 'aajjo',
           ownedBy: new Types.ObjectId(userId),
