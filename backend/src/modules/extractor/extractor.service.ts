@@ -680,6 +680,22 @@ export class ExtractorService {
           (document.querySelector('img[class*="logo" i]') as HTMLImageElement | null);
         const logo = jldLogo || logoDom?.src || '';
 
+        // Some listings (e.g. store-branded product pages) carry no JSON-LD at all,
+        // so the seller name has to come from the same store-link card as the logo.
+        const nameDom =
+          (document.querySelector('.logoWrapper a[title]') as HTMLElement | null)?.getAttribute('title') ||
+          (document.querySelector('img.detailLogo[alt], img.ahataLgo[alt]') as HTMLImageElement | null)?.alt ||
+          (document.querySelector('.logoWrapper a, .ps-2 a.fw-bold') as HTMLElement | null)?.textContent?.trim() ||
+          '';
+        const sellerName = jldSellerName || nameDom;
+
+        // Same store-link card carries the profile URL; the address sits in its own
+        // row lower down, tagged with a location-pin icon rather than a class name.
+        const profileUrlDom =
+          (document.querySelector('.logoWrapper a[href*="/store/"], .logoWrapper a[href*="/ahata/"]') as HTMLAnchorElement | null)?.href || '';
+        const addressDom =
+          (document.querySelector('svg.svgLocation') as Element | null)?.nextElementSibling?.textContent?.trim() || '';
+
         const contactFromRows =
           rows['contact person'] || rows['phone'] || rows['mobile'] ||
           rows['contact no'] || rows['contact number'] || rows['telephone'] || '';
@@ -692,11 +708,11 @@ export class ExtractorService {
         return {
           rows,
           gst,
-          sellerName: jldSellerName,
-          address:    jldAddress,
+          sellerName,
+          address:    jldAddress || addressDom,
           city:       jldCity,
           state:      jldState,
-          profileUrl: jldProfileUrl,
+          profileUrl: jldProfileUrl || profileUrlDom,
           logo,
           contactDetails,
         };
