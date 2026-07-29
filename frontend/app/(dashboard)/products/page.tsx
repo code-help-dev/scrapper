@@ -24,6 +24,7 @@ import {
   Trash2,
   Loader2,
   Search,
+  Download,
 } from 'lucide-react';
 import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Badge } from '@/components/ui/badge';
@@ -313,6 +314,12 @@ function ProductsContent() {
     },
     onError: (e: any) => toast.error(e.response?.data?.message ?? 'Bulk delete failed'),
     onSettled: () => setPendingDelete(null),
+  });
+
+  const exportSelectedMutation = useMutation({
+    mutationFn: (ids: string[]) => productsApi.exportSelected(ids),
+    onSuccess: () => toast.success('Export downloaded'),
+    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Export failed'),
   });
 
   const handleCategorySelect = (name: string) => {
@@ -742,6 +749,20 @@ function ProductsContent() {
       {selectMode && selectedIds.size > 0 && (
         <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-background px-4 py-2 shadow-lg">
           <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={exportSelectedMutation.isPending}
+            onClick={() => exportSelectedMutation.mutate(Array.from(selectedIds))}
+          >
+            {exportSelectedMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Export selected
+          </Button>
           <Button
             size="sm"
             variant="destructive"

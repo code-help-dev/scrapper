@@ -133,6 +133,14 @@ export const productsApi = {
     };
     confirm: boolean;
   }) => api.post('/products/bulk-delete', payload),
+  exportSelected: async (productIds: string[]) => {
+    const res = await api.post(
+      '/products/export-selected',
+      { productIds },
+      { responseType: 'blob' },
+    );
+    await triggerBlobDownload(res as any);
+  },
 };
 
 interface ExportPayload {

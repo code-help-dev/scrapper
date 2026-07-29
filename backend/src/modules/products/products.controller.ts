@@ -13,6 +13,7 @@ import {
   NotFoundException,
   ForbiddenException,
   Logger,
+  Res,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -33,6 +34,8 @@ import {
   ApiProperty,
   ApiPropertyOptional,
 } from '@nestjs/swagger';
+import { Response } from 'express';
+import { stringify } from 'csv-stringify/sync';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums/user-role.enum';
@@ -68,6 +71,12 @@ class BulkDeleteProductsDto {
   filter?: BulkDeleteProductsFilterDto;
 
   @ApiProperty() @IsBoolean() confirm: boolean;
+}
+
+class ExportSelectedProductsDto {
+  @ApiProperty({ type: [String] })
+  @IsArray() @IsString({ each: true })
+  productIds: string[];
 }
 
 @ApiTags('Products')
@@ -339,6 +348,46 @@ export class ProductsController {
     );
 
     return { requested: targetIds.length, deleted, failed };
+  }
+
+  @Post('export-selected')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Export product name, source URL, and confidence score for selected products as CSV',
+  })
+  async exportSelected(
+    @Body() dto: ExportSelectedProductsDto,
+    @CurrentUser() user: { id: string; role: string },
+    @Res() res: Response,
+  ) {
+    if (!dto.productIds?.length) {
+      throw new BadRequestException('productIds must not be empty');
+    }
+
+    const ids = dto.productIds
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    const filter: Record<string, unknown> = { _id: { $in: ids } };
+    if (user.role !== UserRole.ADMIN) filter.ownedBy = new Types.ObjectId(user.id);
+
+    const products = await this.productModel
+      .find(filter)
+      .select('productName sourceUrl confidenceScore')
+      .lean()
+      .exec();
+
+    const columns = ['Product Name', 'Product URL', 'Confidence Score'];
+    const rows = products.map((p) => ({
+      'Product Name': p.productName ?? '',
+      'Product URL': p.sourceUrl ?? '',
+      'Confidence Score': p.confidenceScore ?? '',
+    }));
+    const csv = stringify(rows, { header: true, columns });
+    const fileName = `products_urls_${Date.now()}.csv`;
+
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.send(csv);
   }
 
   @Get(':id')
