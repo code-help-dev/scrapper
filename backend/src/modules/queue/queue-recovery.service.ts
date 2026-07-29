@@ -9,7 +9,9 @@ import { JobStatus } from '../../common/enums/job-status.enum';
 import { DynamicQueueService } from './dynamic-queue.service';
 import { ScrapeUrlPayload } from './processors/extraction.processor';
 
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
+// Aajjo hosts single-item detail pages under both /product/ and /service/ —
+// anything else under the domain is a category/listing page to discover-crawl.
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/(product|service)\//i;
 
 @Injectable()
 export class QueueRecoveryService implements OnApplicationBootstrap {

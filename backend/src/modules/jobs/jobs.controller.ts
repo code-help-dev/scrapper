@@ -18,7 +18,9 @@ import {
   Logger,
 } from '@nestjs/common';
 
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
+// Aajjo hosts single-item detail pages under both /product/ and /service/ —
+// anything else under the domain is a category/listing page to discover-crawl.
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/(product|service)\//i;
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Observable, interval, from } from 'rxjs';

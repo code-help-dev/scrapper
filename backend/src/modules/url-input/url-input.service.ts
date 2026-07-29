@@ -15,7 +15,9 @@ import { ScrapeUrlPayload } from '../queue/processors/extraction.processor';
 import { DynamicQueueService } from '../queue/dynamic-queue.service';
 
 const AAJJO_DOMAIN_RE = /^https?:\/\/(www\.)?aajjo\.com\//i;
-const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/product\//i;
+// Aajjo hosts single-item detail pages under both /product/ and /service/ —
+// anything else under the domain is a category/listing page to discover-crawl.
+const AAJJO_PRODUCT_RE = /^https?:\/\/(www\.)?aajjo\.com\/(product|service)\//i;
 const MAX_BULK = 500;
 
 @Injectable()

@@ -110,6 +110,8 @@ export const productsApi = {
     seller?: string;
     search?: string;
     flagged?: boolean;
+    missingSeller?: boolean;
+    missingPrice?: boolean;
     minConfidence?: number;
     maxConfidence?: number;
     sortBy?: string;

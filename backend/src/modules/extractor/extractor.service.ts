@@ -598,6 +598,11 @@ export class ExtractorService {
               }
               
               if (g['@type'] === 'LocalBusiness') {
+                // Some listings only emit a LocalBusiness block (no Product/offers.seller
+                // block above) — it carries the seller's own name/url directly, so fall
+                // back to those instead of leaving sellerName/profileUrl empty.
+                jldSellerName = jldSellerName || (g.name ?? '');
+                jldProfileUrl = jldProfileUrl || (g.url ?? '');
                 jldLogo    = jldLogo    || (g.image ?? '');
                 jldPhone   = jldPhone   || (g.telephone ?? '');
                 const addr = g.address ?? {};

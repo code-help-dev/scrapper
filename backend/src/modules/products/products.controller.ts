@@ -212,6 +212,8 @@ export class ProductsController {
   @ApiQuery({ name: 'seller', required: false })
   @ApiQuery({ name: 'search', required: false, description: 'Search by product name' })
   @ApiQuery({ name: 'flagged', required: false, type: Boolean })
+  @ApiQuery({ name: 'missingSeller', required: false, type: Boolean, description: 'Only products with no seller name extracted' })
+  @ApiQuery({ name: 'missingPrice', required: false, type: Boolean, description: 'Only products with no price extracted' })
   @ApiQuery({ name: 'minConfidence', required: false, type: Number })
   @ApiQuery({ name: 'maxConfidence', required: false, type: Number })
   @ApiQuery({ name: 'sortBy', required: false, enum: ['createdAt', 'price', 'name', 'confidence'] })
@@ -226,6 +228,8 @@ export class ProductsController {
     @Query('seller') seller?: string,
     @Query('search') search?: string,
     @Query('flagged') flagged?: string,
+    @Query('missingSeller') missingSeller?: string,
+    @Query('missingPrice') missingPrice?: string,
     @Query('minConfidence') minConfidence?: number,
     @Query('maxConfidence') maxConfidence?: number,
     @Query('sortBy') sortBy?: string,
@@ -243,6 +247,24 @@ export class ProductsController {
     if (seller) filter['seller.sellerName'] = { $regex: seller, $options: 'i' };
     if (search) filter.productName = { $regex: ProductsController.escapeRegExp(search), $options: 'i' };
     if (flagged !== undefined) filter.isFlagged = flagged === 'true';
+    // Both "missing" filters express as $or, so they're collected into $and
+    // instead of assigning filter.$or twice (the second would silently clobber the first).
+    const andConditions: Record<string, unknown>[] = [];
+    if (missingSeller === 'true') {
+      andConditions.push({
+        $or: [
+          { 'seller.sellerName': { $exists: false } },
+          { 'seller.sellerName': null },
+          { 'seller.sellerName': '' },
+        ],
+      });
+    }
+    if (missingPrice === 'true') {
+      andConditions.push({
+        $or: [{ price: { $exists: false } }, { price: null }],
+      });
+    }
+    if (andConditions.length) filter.$and = andConditions;
     // Nest's global ValidationPipe (enableImplicitConversion) coerces an absent
     // optional `@Query() x?: number` into Number(undefined) = NaN, not undefined
     // — so `!== undefined` alone doesn't detect "not provided" here; NaN must be
@@ -353,7 +375,8 @@ export class ProductsController {
   @Post('export-selected')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Export product name, source URL, and confidence score for selected products as CSV',
+    summary:
+      'Export product name, source URL, seller name, price, and confidence score for selected products as CSV',
   })
   async exportSelected(
     @Body() dto: ExportSelectedProductsDto,
@@ -372,14 +395,16 @@ export class ProductsController {
 
     const products = await this.productModel
       .find(filter)
-      .select('productName sourceUrl confidenceScore')
+      .select('productName sourceUrl confidenceScore seller.sellerName price currency priceUnit')
       .lean()
       .exec();
 
-    const columns = ['Product Name', 'Product URL', 'Confidence Score'];
+    const columns = ['Product Name', 'Product URL', 'Seller Name', 'Price', 'Confidence Score'];
     const rows = products.map((p) => ({
       'Product Name': p.productName ?? '',
       'Product URL': p.sourceUrl ?? '',
+      'Seller Name': (p.seller as any)?.sellerName ?? '',
+      'Price': p.price != null ? `${p.currency ?? 'INR'} ${p.price}${p.priceUnit ? ` / ${p.priceUnit}` : ''}` : 'Ask Price',
       'Confidence Score': p.confidenceScore ?? '',
     }));
     const csv = stringify(rows, { header: true, columns });

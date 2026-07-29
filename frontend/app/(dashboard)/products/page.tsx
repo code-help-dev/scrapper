@@ -25,6 +25,8 @@ import {
   Loader2,
   Search,
   Download,
+  UserX,
+  IndianRupee,
 } from 'lucide-react';
 import { SmartPagination } from '@/components/ui/smart-pagination';
 import { Badge } from '@/components/ui/badge';
@@ -244,6 +246,8 @@ function ProductsContent() {
   const [maxConfidenceInput, setMaxConfidenceInput] = useState('');
   const [minConfidence, setMinConfidence] = useState<number | undefined>(undefined);
   const [maxConfidence, setMaxConfidence] = useState<number | undefined>(undefined);
+  const [missingSeller, setMissingSeller] = useState(false);
+  const [missingPrice, setMissingPrice] = useState(false);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -273,7 +277,7 @@ function ProductsContent() {
   });
 
   const { data, isLoading } = useQuery<PaginatedResponse<Product>>({
-    queryKey: ['products', page, limit, selectedCategory, selectedSubcategory, sortBy, sortOrder, showFlagged, minConfidence, maxConfidence, search],
+    queryKey: ['products', page, limit, selectedCategory, selectedSubcategory, sortBy, sortOrder, showFlagged, minConfidence, maxConfidence, search, missingSeller, missingPrice],
     queryFn: () =>
       productsApi
         .list({
@@ -285,6 +289,8 @@ function ProductsContent() {
           sortBy,
           sortOrder,
           flagged: showFlagged || undefined,
+          missingSeller: missingSeller || undefined,
+          missingPrice: missingPrice || undefined,
           minConfidence,
           maxConfidence,
         })
@@ -370,6 +376,16 @@ function ProductsContent() {
   };
 
   const confidenceActive = minConfidence !== undefined || maxConfidence !== undefined;
+
+  const toggleMissingSeller = () => {
+    setMissingSeller((prev) => !prev);
+    setPage(1);
+  };
+
+  const toggleMissingPrice = () => {
+    setMissingPrice((prev) => !prev);
+    setPage(1);
+  };
 
   const toggleSelect = (id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -654,6 +670,29 @@ function ProductsContent() {
                 </Button>
               )}
             </div>
+            <div className="h-5 w-px shrink-0 bg-border" />
+            <button
+              onClick={toggleMissingSeller}
+              className={cn(
+                'flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-muted/60',
+                missingSeller
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background',
+              )}
+            >
+              <UserX className="h-3 w-3" /> Missing seller name
+            </button>
+            <button
+              onClick={toggleMissingPrice}
+              className={cn(
+                'flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-muted/60',
+                missingPrice
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background',
+              )}
+            >
+              <IndianRupee className="h-3 w-3" /> Missing price
+            </button>
           </div>
 
           {/* Subcategory chips */}
@@ -708,6 +747,10 @@ function ProductsContent() {
                   ? `No products matching "${search}"`
                   : showFlagged
                   ? 'No flagged products — all extractions are above 70% confidence'
+                  : missingSeller
+                  ? 'No products with a missing seller name'
+                  : missingPrice
+                  ? 'No products with a missing price'
                   : confidenceActive
                   ? 'No products in this confidence range'
                   : selectedCategory
