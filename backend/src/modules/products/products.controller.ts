@@ -236,7 +236,7 @@ export class ProductsController {
     @Query('sortOrder') sortOrder?: string,
   ) {
     const pageNum = Number(page);
-    const limitNum = Math.min(Number(limit), 100);
+    const limitNum = Math.min(Number(limit), 2500);
     const skip = (pageNum - 1) * limitNum;
 
     const filter: Record<string, unknown> = {};

@@ -221,7 +221,7 @@ function CategoryNav({
   );
 }
 
-const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50];
+const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 2500];
 
 type PendingDelete =
   | { mode: 'selected'; ids: string[] }
@@ -608,13 +608,13 @@ function ProductsContent() {
                 </SelectContent>
               </Select>
               <Select value={String(limit)} onValueChange={handleLimitChange}>
-                <SelectTrigger className="w-24 h-8 text-sm">
+                <SelectTrigger className="w-28 h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {ITEMS_PER_PAGE_OPTIONS.map((n) => (
                     <SelectItem key={n} value={String(n)}>
-                      {n} / page
+                      {n.toLocaleString()} / page
                     </SelectItem>
                   ))}
                 </SelectContent>
