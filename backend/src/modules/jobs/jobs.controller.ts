@@ -32,8 +32,11 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 import {
   ApiTags,
@@ -71,6 +74,14 @@ class BulkRetryJobsDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean() all?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() onlyFlagged?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Only meaningful with onlyFlagged — further restricts to flagged products with ' +
+      'confidenceScore <= this value (0-100), e.g. re-run only the lowest-confidence flags first.',
+  })
+  @IsOptional() @IsNumber() @Min(0) @Max(100)
+  maxConfidence?: number;
 }
 
 class BulkDeleteJobsDto {
@@ -112,9 +123,11 @@ export class JobsController {
   // least one Product with isFlagged=true. Kept as an $in match (not a $lookup)
   // on the hot, paginated list endpoint so existing filters/sort/pagination are
   // untouched; the one-off export endpoint below can afford a real aggregation.
-  private async flaggedProductIds(): Promise<Types.ObjectId[]> {
+  private async flaggedProductIds(maxConfidence?: number): Promise<Types.ObjectId[]> {
+    const query: Record<string, unknown> = { isFlagged: true };
+    if (maxConfidence != null) query.confidenceScore = { $lte: maxConfidence };
     const flagged = await this.productModel
-      .find({ isFlagged: true }, { _id: 1 })
+      .find(query, { _id: 1 })
       .lean()
       .exec();
     return flagged.map((p) => p._id as Types.ObjectId);
@@ -127,6 +140,7 @@ export class JobsController {
   @ApiQuery({ name: 'status', required: false, enum: JobStatus })
   @ApiQuery({ name: 'search', required: false, description: 'Search by source URL' })
   @ApiQuery({ name: 'flagged', required: false, type: Boolean, description: 'Only jobs that produced a flagged product' })
+  @ApiQuery({ name: 'maxConfidence', required: false, type: Number, description: 'With flagged=true, only jobs whose flagged product scored <= this confidence (0-100)' })
   async findAll(
     @CurrentUser() user: { id: string; role: string },
     @Query('page') page = 1,
@@ -134,6 +148,7 @@ export class JobsController {
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('flagged') flagged?: string,
+    @Query('maxConfidence') maxConfidence?: string,
   ): Promise<{ data: unknown[]; meta: { total: number; page: number; limit: number; pages: number } }> {
     const skip = (Number(page) - 1) * Number(limit);
     const isAdmin = user.role === UserRole.ADMIN;
@@ -150,8 +165,9 @@ export class JobsController {
     }
     if (status) filter.status = status;
     if (search) filter.sourceUrl = { $regex: search, $options: 'i' };
+    const maxConfidenceNum = maxConfidence != null && maxConfidence !== '' ? Number(maxConfidence) : undefined;
     if (flagged === 'true') {
-      filter.productIds = { $in: await this.flaggedProductIds() };
+      filter.productIds = { $in: await this.flaggedProductIds(maxConfidenceNum) };
     }
 
     const [items, total] = await Promise.all([
@@ -171,18 +187,28 @@ export class JobsController {
     // "flagged" filter isn't active — bounded by this page's productIds only,
     // never a full-collection scan.
     const pageProductIds = items.flatMap((j) => j.productIds ?? []);
-    let flaggedSet = new Set<string>();
+    let flaggedConfidenceById = new Map<string, number>();
     if (pageProductIds.length) {
       const flaggedHere = await this.productModel
-        .find({ _id: { $in: pageProductIds }, isFlagged: true }, { _id: 1 })
+        .find({ _id: { $in: pageProductIds }, isFlagged: true }, { _id: 1, confidenceScore: 1 })
         .lean()
         .exec();
-      flaggedSet = new Set(flaggedHere.map((p) => p._id.toString()));
+      flaggedConfidenceById = new Map(
+        flaggedHere.map((p) => [p._id.toString(), p.confidenceScore]),
+      );
     }
-    const data = items.map((job) => ({
-      ...job,
-      hasFlaggedProduct: (job.productIds ?? []).some((id) => flaggedSet.has(id.toString())),
-    }));
+    const data = items.map((job) => {
+      const confidences = (job.productIds ?? [])
+        .map((id) => flaggedConfidenceById.get(id.toString()))
+        .filter((v): v is number => v != null);
+      return {
+        ...job,
+        hasFlaggedProduct: confidences.length > 0,
+        // Lowest score among this job's flagged products — surfaced so the UI can
+        // let users retry only the lowest-confidence flags instead of all of them.
+        flaggedConfidence: confidences.length ? Math.min(...confidences) : undefined,
+      };
+    });
 
     return {
       data,
@@ -388,7 +414,8 @@ export class JobsController {
       'FAILED or COMPLETED, same rule as the single-job retry endpoint), all=true ' +
       '("retry all failed jobs" — FAILED only, COMPLETED jobs are never bulk-retried ' +
       'implicitly), or onlyFlagged=true (every job that produced a flagged product, ' +
-      'FAILED or COMPLETED).',
+      'FAILED or COMPLETED). onlyFlagged can be paired with maxConfidence to only retry ' +
+      'flagged jobs at or below a given confidence score.',
   })
   async bulkRetry(
     @Body() dto: BulkRetryJobsDto,
@@ -411,7 +438,7 @@ export class JobsController {
       filter.status = JobStatus.FAILED;
     } else {
       filter.status = { $in: [JobStatus.FAILED, JobStatus.COMPLETED] };
-      filter.productIds = { $in: await this.flaggedProductIds() };
+      filter.productIds = { $in: await this.flaggedProductIds(dto.maxConfidence) };
     }
 
     const targets = await this.jobModel.find(filter).exec();

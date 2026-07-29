@@ -97,7 +97,7 @@ type PendingAction =
   | { kind: 'delete'; mode: 'status'; status: 'completed' | 'failed' | 'flagged'; label: string }
   | { kind: 'retry'; mode: 'ids'; ids: string[]; label: string }
   | { kind: 'retry'; mode: 'all'; label: string }
-  | { kind: 'retry'; mode: 'onlyFlagged'; label: string };
+  | { kind: 'retry'; mode: 'onlyFlagged'; label: string; maxConfidence?: number };
 
 function summarizeResult(kind: 'delete' | 'retry', res: BulkActionResult) {
   const done = kind === 'delete' ? res.deleted ?? 0 : res.retried ?? 0;
@@ -114,14 +114,17 @@ export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [confidenceThreshold, setConfidenceThreshold] = useState<string>('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'xlsx' | null>(null);
 
+  const maxConfidence = confidenceThreshold !== '' ? Number(confidenceThreshold) : undefined;
+
   const { data, isLoading } = useQuery<PaginatedResponse<ExtractionJob>>({
-    queryKey: ['jobs', page, statusFilter, search, flaggedOnly],
+    queryKey: ['jobs', page, statusFilter, search, flaggedOnly, maxConfidence],
     queryFn: () =>
       jobsApi
         .list({
@@ -130,6 +133,7 @@ export default function JobsPage() {
           status: statusFilter === 'all' ? undefined : statusFilter,
           search: search || undefined,
           flagged: flaggedOnly || undefined,
+          maxConfidence: flaggedOnly ? maxConfidence : undefined,
         })
         .then((r) => r.data),
     refetchInterval: 5_000,
@@ -153,7 +157,11 @@ export default function JobsPage() {
         return (res.data as PaginatedResponse<ExtractionJob>).meta.total;
       }
       if (pendingAction.kind === 'retry' && pendingAction.mode === 'onlyFlagged') {
-        const res = await jobsApi.list({ flagged: true, limit: 1 });
+        const res = await jobsApi.list({
+          flagged: true,
+          maxConfidence: pendingAction.maxConfidence,
+          limit: 1,
+        });
         return (res.data as PaginatedResponse<ExtractionJob>).meta.total;
       }
       return 0;
@@ -268,7 +276,7 @@ export default function JobsPage() {
       } else if (pendingAction.mode === 'all') {
         bulkRetryMutation.mutate({ all: true });
       } else {
-        bulkRetryMutation.mutate({ onlyFlagged: true });
+        bulkRetryMutation.mutate({ onlyFlagged: true, maxConfidence: pendingAction.maxConfidence });
       }
     }
   };
@@ -351,6 +359,19 @@ export default function JobsPage() {
             <Flag className="h-3.5 w-3.5 mr-1.5" /> Flagged
           </Button>
 
+          <div className="flex items-center gap-1" title="Only include flagged products at or below this confidence score">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              placeholder="Confidence ≤"
+              value={confidenceThreshold}
+              onChange={(e) => { setConfidenceThreshold(e.target.value); setPage(1); }}
+              className="h-8 w-28 text-sm"
+            />
+            <span className="text-xs text-muted-foreground">%</span>
+          </div>
+
           <Button
             size="sm"
             variant={statusFilter === 'failed' ? 'destructive' : 'outline'}
@@ -402,9 +423,20 @@ export default function JobsPage() {
         </Button>
         <Button
           size="sm" variant="outline" className="h-7 text-xs"
-          onClick={() => setPendingAction({ kind: 'retry', mode: 'onlyFlagged', label: 'Retry all flagged jobs' })}
+          onClick={() =>
+            setPendingAction({
+              kind: 'retry',
+              mode: 'onlyFlagged',
+              maxConfidence,
+              label:
+                maxConfidence != null
+                  ? `Retry flagged jobs with confidence ≤ ${maxConfidence}%`
+                  : 'Retry all flagged jobs',
+            })
+          }
         >
-          <Flag className="h-3 w-3 mr-1" /> Retry all flagged
+          <Flag className="h-3 w-3 mr-1" />
+          {maxConfidence != null ? `Retry flagged ≤ ${maxConfidence}%` : 'Retry all flagged'}
         </Button>
         <Button
           size="sm" variant="outline" className="h-7 text-xs text-destructive"
@@ -512,7 +544,8 @@ export default function JobsPage() {
                         </a>
                         {job.hasFlaggedProduct && (
                           <Badge variant="warning" className="gap-1 text-[10px] px-1.5 py-0 shrink-0">
-                            <Flag className="h-2.5 w-2.5" /> Flagged
+                            <Flag className="h-2.5 w-2.5" />
+                            Flagged{job.flaggedConfidence != null ? ` (${job.flaggedConfidence}%)` : ''}
                           </Badge>
                         )}
                       </div>

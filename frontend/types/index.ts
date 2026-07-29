@@ -44,6 +44,7 @@ export interface ExtractionJob {
   lastRetriedBy: string | null;
   retryHistory: RetryHistoryEntry[];
   hasFlaggedProduct?: boolean;
+  flaggedConfidence?: number;
 }
 
 export interface BulkActionResult {

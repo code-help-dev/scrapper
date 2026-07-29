@@ -68,6 +68,7 @@ export const jobsApi = {
     status?: string;
     search?: string;
     flagged?: boolean;
+    maxConfidence?: number;
   }) => api.get('/jobs', { params }),
   get: (id: string) => api.get(`/jobs/${id}`),
   submitUrl: (url: string, label?: string) =>
@@ -83,8 +84,12 @@ export const jobsApi = {
   retry: (id: string) => api.post(`/jobs/${id}/retry`),
   pause: (id: string) => api.post(`/jobs/${id}/pause`),
   resume: (id: string) => api.post(`/jobs/${id}/resume`),
-  bulkRetry: (payload: { jobIds?: string[]; all?: boolean; onlyFlagged?: boolean }) =>
-    api.post('/jobs/bulk-retry', payload),
+  bulkRetry: (payload: {
+    jobIds?: string[];
+    all?: boolean;
+    onlyFlagged?: boolean;
+    maxConfidence?: number;
+  }) => api.post('/jobs/bulk-retry', payload),
   bulkDelete: (payload: {
     jobIds?: string[];
     status?: 'completed' | 'failed' | 'flagged';
