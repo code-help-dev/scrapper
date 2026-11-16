@@ -378,7 +378,8 @@ export class ExtractorService {
           document.querySelector('.product-details table.service-chart-datails') ??
           document.querySelector('.product-details table.service-chart-details') ??
           document.querySelector('table.service-chart-datails') ??
-          document.querySelector('table.service-chart-details');
+          document.querySelector('table.service-chart-details') ??
+          document.querySelector('table.shdms1'); // "Product Specifications" table beside the price
         readTable(basicTable, 'basic');
 
         const isStopNode = (el: Element): boolean => {

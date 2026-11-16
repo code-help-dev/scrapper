@@ -10,6 +10,7 @@ export const SELECTORS = {
   ],
 
   price: [
+    '.new-price strong', // actual price; span.fw-bold is the "19.35% Off" badge
     '.new-price span.fw-bold',
     '.new-price',
     '.product-price span.fw-bold',
