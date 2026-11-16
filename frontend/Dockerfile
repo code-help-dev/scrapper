@@ -17,6 +17,8 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Server-side rewrite target (baked at build): compose service name 'backend'
+ENV REWRITE_API_URL=http://backend:3001/api
 
 RUN npm run build
 

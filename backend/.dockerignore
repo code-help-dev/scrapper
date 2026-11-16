@@ -1,7 +1,8 @@
 node_modules
 dist
 *.tsbuildinfo
-.env
+.env*
+exports
 coverage
 test
 *.log
