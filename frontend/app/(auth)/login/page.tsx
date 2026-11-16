@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,6 +68,10 @@ export default function LoginPage() {
               Sign in
             </Button>
           </form>
+          <div className="flex items-center justify-between text-xs text-muted-foreground mt-4">
+            <Link href="/register" className="underline underline-offset-2">Create account</Link>
+            <Link href="/forgot-password" className="underline underline-offset-2">Forgot password?</Link>
+          </div>
         </CardContent>
       </Card>
     </div>

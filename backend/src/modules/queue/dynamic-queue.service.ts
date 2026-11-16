@@ -15,7 +15,6 @@ import { ExtractionProcessor, ScrapeUrlPayload } from './processors/extraction.p
 import { JOB_SCRAPE_URL } from './queue.constants';
 
 const MAX_USERS = 30;
-const WORKER_CONCURRENCY = 2;
 const LOCK_DURATION = 120_000;
 
 @Injectable()
@@ -24,6 +23,7 @@ export class DynamicQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly queues = new Map<string, Queue>();
   private readonly workers = new Map<string, Worker>();
   private connection: { host: string; port: number; password?: string };
+  private workerConcurrency: number;
 
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
@@ -36,6 +36,8 @@ export class DynamicQueueService implements OnModuleInit, OnModuleDestroy {
       port: this.config.get<number>('redis.port')!,
       password: this.config.get<string>('redis.password') || undefined,
     };
+    this.workerConcurrency = this.config.get<number>('scraping.workerConcurrency') ?? 5;
+    this.logger.log(`Worker concurrency: ${this.workerConcurrency}`);
   }
 
   async onModuleInit() {
@@ -85,7 +87,7 @@ export class DynamicQueueService implements OnModuleInit, OnModuleDestroy {
       {
         connection: this.connection,
         lockDuration: LOCK_DURATION,
-        concurrency: WORKER_CONCURRENCY,
+        concurrency: this.workerConcurrency,
       },
     );
 

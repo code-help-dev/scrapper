@@ -39,6 +39,7 @@ export class ImageService {
   private readonly s3: S3Client;
   private readonly bucket: string;
   private readonly imagePrefix: string;
+  private readonly logoPrefix: string;
 
   constructor(
     private readonly config: ConfigService,
@@ -47,6 +48,7 @@ export class ImageService {
   ) {
     this.bucket = config.get<string>('s3.bucket')!;
     this.imagePrefix = config.get<string>('s3.imagePrefix') ?? 'images';
+    this.logoPrefix = config.get<string>('s3.logoPrefix') ?? 'logos';
 
     this.s3 = new S3Client({
       region: config.get<string>('s3.region') ?? 'ap-south-1',
@@ -171,6 +173,33 @@ export class ImageService {
 
     this.logger.log(`Processed ${results.length}/${rawImages.length} images for product ${productId}`);
     return results;
+  }
+
+  isOwnStorageUrl(url: string): boolean {
+    return !!url && url.includes(`${this.bucket}.s3.`);
+  }
+
+  // Seller logos are re-used across every product from the same seller, so they're
+  // keyed by seller slug (not a timestamp) and re-uploading overwrites the same S3
+  // object instead of accumulating duplicates. Unlike product photos they skip the
+  // min-dimension check (logos are legitimately small) and pHash dedup (identical
+  // logos across a seller's products are expected, not duplicates to reject).
+  async processSellerLogo(
+    originalUrl: string,
+    sellerSlug: string,
+  ): Promise<{ storageUrl: string; s3Key: string } | null> {
+    try {
+      const rawBuffer = await this.downloadImage(originalUrl);
+      const webpBuffer = await sharp(rawBuffer).webp({ quality: 92, effort: 4 }).toBuffer();
+
+      const logoKey = `${this.logoPrefix}/${sellerSlug}.webp`;
+      await this.uploadToS3(webpBuffer, logoKey);
+
+      return { storageUrl: this.buildUrl(logoKey), s3Key: logoKey };
+    } catch (err: any) {
+      this.logger.error(`Failed to process seller logo ${originalUrl}: ${err.message}`);
+      return null;
+    }
   }
 
   async deleteImage(s3Key: string): Promise<void> {

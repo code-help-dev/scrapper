@@ -30,10 +30,12 @@ export default () => ({
     bucket: process.env.AWS_S3_BUCKET || 'eb2bmart-dev-bucket',
     cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || '',
     imagePrefix: process.env.S3_IMAGE_PREFIX || 'images',
+    logoPrefix: process.env.S3_LOGO_PREFIX || 'logos',
   },
 
   scraping: {
     maxConcurrentBrowsers: num('MAX_CONCURRENT_BROWSERS', 5),
+    workerConcurrency: num('WORKER_CONCURRENCY', 5),
     proxyServiceUrl: process.env.PROXY_SERVICE_URL || '',
     proxyApiKey: process.env.PROXY_API_KEY || '',
     requestDelayMin: num('REQUEST_DELAY_MIN_MS', 2000),

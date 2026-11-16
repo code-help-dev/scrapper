@@ -1,11 +1,10 @@
-import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Logger, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { createHash } from 'crypto';
 import {
-  QUEUE_EXTRACTION,
   QUEUE_IMAGE,
   JOB_PROCESS_IMAGE,
 } from '../queue.constants';
@@ -16,7 +15,7 @@ import {
 import { Product, ProductDocument } from '../../database/schemas/product.schema';
 import { Category, CategoryDocument } from '../../database/schemas/category.schema';
 import { JobStatus, JobType } from '../../../common/enums/job-status.enum';
-import { ExtractionStatus } from '../../../common/enums/extraction-status.enum';
+import { ExtractionStatus, FLAG_CONFIDENCE_THRESHOLD } from '../../../common/enums/extraction-status.enum';
 import { ScraperService } from '../../scraper/scraper.service';
 import { ExtractorService } from '../../extractor/extractor.service';
 import { NormalizationService } from '../../normalization/normalization.service';
@@ -36,8 +35,8 @@ export interface ProcessImagePayload {
   images: { originalUrl: string; isFeatured: boolean }[];
 }
 
-@Processor(QUEUE_EXTRACTION, { lockDuration: 120000 })
-export class ExtractionProcessor extends WorkerHost {
+@Injectable()
+export class ExtractionProcessor {
   private readonly logger = new Logger(ExtractionProcessor.name);
 
   constructor(
@@ -55,9 +54,7 @@ export class ExtractionProcessor extends WorkerHost {
     private readonly extractorService: ExtractorService,
     private readonly normalizationService: NormalizationService,
     private readonly sellersService: SellersService,
-  ) {
-    super();
-  }
+  ) {}
 
   async process(job: Job<ScrapeUrlPayload>): Promise<void> {
     const { jobId, sourceUrl, userId, isDiscovery, parentJobId } = job.data;
@@ -178,21 +175,28 @@ export class ExtractionProcessor extends WorkerHost {
       .update(`${normalized.productName}::${sourceUrl}`)
       .digest('hex');
 
+    // Resolve (and upload, if not already hosted) the seller's logo before saving
+    // so the product is written once with the final S3 URL rather than the raw
+    // external one.
+    const logoUrl = await this.sellersService.upsertFromProduct(normalized.seller);
+    const seller = { ...normalized.seller, sellerLogoUrl: logoUrl };
+
     const savedProduct = await this.productModel.findOneAndUpdate(
       { sourceUrl },
       {
         $set: {
           productName: normalized.productName,
-          category: normalized.category,
           subCategory: normalized.subCategory,
+          productType: normalized.productType,
           price: normalized.price,
           currency: normalized.currency,
+          priceUnit: normalized.priceUnit,
           moq: normalized.moq,
           description: normalized.description,
           deliveryInformation: normalized.deliveryInformation,
           warrantyInformation: normalized.warrantyInformation,
           specifications: normalized.specifications,
-          seller: normalized.seller,
+          seller,
           images: normalized.images.map((img) => ({
             originalUrl: img.originalUrl,
             isFeatured: img.isFeatured,
@@ -203,7 +207,7 @@ export class ExtractionProcessor extends WorkerHost {
           })),
           extractionStatus: ExtractionStatus.COMPLETED,
           confidenceScore: normalized.confidenceScore,
-          isFlagged: normalized.confidenceScore < 70,
+          isFlagged: normalized.confidenceScore < FLAG_CONFIDENCE_THRESHOLD,
           contentHash,
           sourcePlatform: 'aajjo',
           ownedBy: new Types.ObjectId(userId),
@@ -216,11 +220,9 @@ export class ExtractionProcessor extends WorkerHost {
       `[${jobId}] Saved "${normalized.productName}" — confidence: ${normalized.confidenceScore}%`,
     );
 
-    await this.sellersService.upsertFromProduct(normalized.seller);
-
-    if (normalized.category) {
+    if (normalized.subCategory) {
       try {
-        const slug = normalized.category
+        const slug = normalized.subCategory
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
@@ -228,14 +230,14 @@ export class ExtractionProcessor extends WorkerHost {
         const cat = await this.categoryModel.findOneAndUpdate(
           { slug },
           {
-            $setOnInsert: { name: normalized.category, slug },
+            $setOnInsert: { name: normalized.subCategory, slug },
             $inc: { productCount: 1 },
           },
           { upsert: true, new: true },
         );
 
-        if (normalized.subCategory) {
-          const normalizedSubName = normalized.subCategory.trim();
+        if (normalized.productType) {
+          const normalizedSubName = normalized.productType.trim();
           const subSlug = normalizedSubName
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')

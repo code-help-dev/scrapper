@@ -4,6 +4,27 @@ import { JobStatus, JobType } from '../../../common/enums/job-status.enum';
 
 export type ExtractionJobDocument = ExtractionJob & Document;
 
+@Schema({ _id: false })
+export class RetryHistoryEntry {
+  @Prop({ type: Date, default: Date.now })
+  attemptedAt: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  initiatedBy: Types.ObjectId | null;
+
+  @Prop({ type: String, enum: JobStatus })
+  previousStatus: JobStatus;
+
+  @Prop({ default: 0 }) previousProcessedCount: number;
+  @Prop({ default: 0 }) previousFailedCount: number;
+  @Prop({ default: 0 }) previousTotalProducts: number;
+
+  @Prop({ type: String, default: null })
+  previousErrorMessage: string | null;
+}
+
+export const RetryHistoryEntrySchema = SchemaFactory.createForClass(RetryHistoryEntry);
+
 @Schema({ timestamps: true })
 export class ExtractionJob {
   @Prop({ required: true })
@@ -35,6 +56,17 @@ export class ExtractionJob {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   submittedBy: Types.ObjectId;
+
+  @Prop({ default: 0 }) retryCount: number;
+
+  @Prop({ type: Date, default: null })
+  lastRetriedAt: Date | null;
+
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  lastRetriedBy: Types.ObjectId | null;
+
+  @Prop({ type: [RetryHistoryEntrySchema], default: [] })
+  retryHistory: RetryHistoryEntry[];
 }
 
 export const ExtractionJobSchema = SchemaFactory.createForClass(ExtractionJob);
@@ -44,3 +76,5 @@ ExtractionJobSchema.index({ submittedBy: 1 });
 ExtractionJobSchema.index({ createdAt: -1 });
 ExtractionJobSchema.index({ status: 1, createdAt: -1 });
 ExtractionJobSchema.index({ sourceUrl: 1 });
+ExtractionJobSchema.index({ productIds: 1 });
+ExtractionJobSchema.index({ parentJobId: 1 });

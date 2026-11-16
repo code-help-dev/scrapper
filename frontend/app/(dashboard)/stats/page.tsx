@@ -1,5 +1,6 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { dashboardApi } from '@/lib/api';
 import { DashboardStats } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,12 +10,12 @@ import {
 } from 'recharts';
 import { Package, CheckCircle2, AlertTriangle, Flag, Briefcase } from 'lucide-react';
 
-function StatCard({ title, value, sub, icon: Icon, color = 'text-primary' }: {
+function StatCard({ title, value, sub, icon: Icon, color = 'text-primary', href }: {
   title: string; value: number | string; sub?: string;
-  icon: React.ElementType; color?: string;
+  icon: React.ElementType; color?: string; href?: string;
 }) {
-  return (
-    <Card>
+  const inner = (
+    <Card className={href ? 'transition hover:shadow-md hover:border-primary/40 cursor-pointer' : ''}>
       <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -27,6 +28,7 @@ function StatCard({ title, value, sub, icon: Icon, color = 'text-primary' }: {
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 export default function StatsPage() {
@@ -52,7 +54,7 @@ export default function StatsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Products" value={products.total} icon={Package} />
         <StatCard title="Completed" value={products.completed} icon={CheckCircle2} color="text-green-600" />
-        <StatCard title="Flagged (< 70%)" value={products.flagged} icon={Flag} color="text-yellow-600" />
+        <StatCard title="Flagged (< 70%)" value={products.flagged} icon={Flag} color="text-yellow-600" href="/products?flagged=true" />
         <StatCard title="Avg Confidence" value={`${products.avgConfidenceScore}%`} icon={AlertTriangle} />
       </div>
 

@@ -56,6 +56,8 @@ export const authApi = {
     api.post('/auth/login', { email, password }),
   register: (email: string, password: string, role = 'operator') =>
     api.post('/auth/register', { email, password, role }),
+  forgotPassword: (email: string, newPassword: string) =>
+    api.post('/auth/forgot-password', { email, newPassword }),
   me: () => api.get('/auth/me'),
 };
 
@@ -65,6 +67,8 @@ export const jobsApi = {
     limit?: number;
     status?: string;
     search?: string;
+    flagged?: boolean;
+    maxConfidence?: number;
   }) => api.get('/jobs', { params }),
   get: (id: string) => api.get(`/jobs/${id}`),
   submitUrl: (url: string, label?: string) =>
@@ -80,6 +84,25 @@ export const jobsApi = {
   retry: (id: string) => api.post(`/jobs/${id}/retry`),
   pause: (id: string) => api.post(`/jobs/${id}/pause`),
   resume: (id: string) => api.post(`/jobs/${id}/resume`),
+  bulkRetry: (payload: {
+    jobIds?: string[];
+    all?: boolean;
+    onlyFlagged?: boolean;
+    maxConfidence?: number;
+  }) => api.post('/jobs/bulk-retry', payload),
+  bulkDelete: (payload: {
+    jobIds?: string[];
+    status?: 'completed' | 'failed' | 'flagged';
+    all?: boolean;
+    confirm: boolean;
+  }) => api.post('/jobs/bulk-delete', payload),
+  exportFlagged: async (format: 'csv' | 'xlsx' = 'csv') => {
+    const res = await api.get('/jobs/flagged/export', {
+      params: { format },
+      responseType: 'blob',
+    });
+    await triggerBlobDownload(res as any);
+  },
 };
 
 export const productsApi = {
@@ -90,8 +113,12 @@ export const productsApi = {
     category?: string;
     subCategory?: string;
     seller?: string;
+    search?: string;
     flagged?: boolean;
+    missingSeller?: boolean;
+    missingPrice?: boolean;
     minConfidence?: number;
+    maxConfidence?: number;
     sortBy?: string;
     sortOrder?: string;
   }) => api.get('/products', { params }),
@@ -101,6 +128,26 @@ export const productsApi = {
   categories: () => api.get('/products/categories'),
   subcategories: (category?: string) =>
     api.get('/products/subcategories', { params: category ? { category } : undefined }),
+  bulkDelete: (payload: {
+    productIds?: string[];
+    filter?: {
+      flagged?: boolean;
+      minConfidence?: number;
+      maxConfidence?: number;
+      category?: string;
+      subCategory?: string;
+      status?: string;
+    };
+    confirm: boolean;
+  }) => api.post('/products/bulk-delete', payload),
+  exportSelected: async (productIds: string[]) => {
+    const res = await api.post(
+      '/products/export-selected',
+      { productIds },
+      { responseType: 'blob' },
+    );
+    await triggerBlobDownload(res as any);
+  },
 };
 
 interface ExportPayload {

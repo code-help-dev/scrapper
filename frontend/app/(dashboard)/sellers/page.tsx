@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -98,7 +98,7 @@ function SellerRow({ seller }: { seller: Seller }) {
   );
 }
 
-export default function SellersPage() {
+function SellersContent() {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
@@ -211,5 +211,13 @@ export default function SellersPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function SellersPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4 animate-pulse" />}>
+      <SellersContent />
+    </Suspense>
   );
 }

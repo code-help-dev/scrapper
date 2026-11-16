@@ -7,8 +7,8 @@
 "Price": price
 "Minimum Order Quantity": moq
 "MOQ": moq
-"Category": category
-"Sub Category": subCategory
+"Category": subCategory
+"Sub Category": productType
 
 # ── Material & Composition ─────────────────────────────────────
 "Material": material

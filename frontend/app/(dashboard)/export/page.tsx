@@ -141,10 +141,16 @@ export default function ExportPage() {
   );
 
   const { data: subcategories = [] } = useQuery<SubcategoryInfo[]>({
-    queryKey: ['export-subcategories'],
-    queryFn: () => productsApi.subcategories().then((r) => r.data),
+    queryKey: ['export-subcategories', category],
+    queryFn: () => productsApi.subcategories(category || undefined).then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
+
+  // Sub-categories are scoped to the selected category — clear a stale pick
+  // from a different category so filters can't silently mismatch to 0 rows.
+  useEffect(() => {
+    setSubCategory('');
+  }, [category]);
 
   const filteredSubcategories = useMemo(
     () =>

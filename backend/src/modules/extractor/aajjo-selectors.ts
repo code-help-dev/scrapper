@@ -10,6 +10,7 @@ export const SELECTORS = {
   ],
 
   price: [
+    '.new-price strong', // actual price; span.fw-bold is the "19.35% Off" badge
     '.new-price span.fw-bold',
     '.new-price',
     '.product-price span.fw-bold',
@@ -80,8 +81,9 @@ export const SELECTORS = {
     'table.specification-chart-details',
   ],
 
-  mainImagePattern: 'ExtraLarge',
-  galleryImagePattern: 'Medium',
+  gallerySelector:
+    '.prdDet-sticky .img-showcase img[src], .prdDet-sticky .img-select .img-item img[src]',
+  gallerySelectorFallback: 'img[src*="ExtraLarge"], img[src*="/Large/"], img[src*="Medium"]',
 
   sellerLogoImg: [
     'img.ahataLgo',

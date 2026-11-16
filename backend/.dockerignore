@@ -1,0 +1,10 @@
+node_modules
+dist
+*.tsbuildinfo
+.env
+coverage
+test
+*.log
+.git
+.gitignore
+README.md
