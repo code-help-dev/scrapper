@@ -12,7 +12,7 @@ const nextConfig = {
   },
 
   async rewrites() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const apiBase = process.env.REWRITE_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     return {
       beforeFiles: [
         {
